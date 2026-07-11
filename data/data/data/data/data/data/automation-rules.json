@@ -1,0 +1,178 @@
+[
+  {
+    "id": "rule-001",
+    "name": "Daily VACUUM ANALYZE — prod-postgres",
+    "description": "Reclaim dead tuples and refresh planner statistics on all tables in production",
+    "dbId": "db-001",
+    "dbName": "prod-postgres",
+    "trigger": "cron",
+    "cronExpr": "0 2 * * *",
+    "cronLabel": "Daily at 02:00 UTC",
+    "actions": [
+      {
+        "type": "vacuum",
+        "sql": "VACUUM ANALYZE;"
+      },
+      {
+        "type": "slack_notify",
+        "message": "✅ VACUUM ANALYZE completed on prod-postgres"
+      }
+    ],
+    "enabled": true,
+    "lastRunAt": "2026-07-08T03:31:10.567Z",
+    "lastRunStatus": "success",
+    "lastRunOutput": "VACUUM ANALYZE on prod-postgres\nTime: 9.0s | Tables scanned: 46 | Dead tuples removed: 60624",
+    "nextRunAt": "2026-07-07T16:11:30.700Z",
+    "runCount": 42,
+    "createdAt": "2026-05-31T02:11:30.700Z",
+    "tags": [
+      "maintenance",
+      "postgresql"
+    ]
+  },
+  {
+    "id": "rule-002",
+    "name": "Kill Idle Connections >30min — prod-mysql",
+    "description": "Terminate idle connections that have been open for more than 30 minutes to free pool capacity",
+    "dbId": "db-002",
+    "dbName": "prod-mysql",
+    "trigger": "cron",
+    "cronExpr": "*/15 * * * *",
+    "cronLabel": "Every 15 minutes",
+    "actions": [
+      {
+        "type": "kill_idle",
+        "sql": "SELECT CONCAT('KILL ', id, ';') FROM information_schema.processlist WHERE command = 'Sleep' AND time > 1800;"
+      }
+    ],
+    "enabled": true,
+    "lastRunAt": "2026-07-08T03:31:21.820Z",
+    "lastRunStatus": "success",
+    "lastRunOutput": "Scanned connection pool on prod-mysql\nIdle connections found: 7\nKilled: 5 connections\nPool slots freed: 1",
+    "nextRunAt": "2026-07-07T14:26:30.700Z",
+    "runCount": 193,
+    "createdAt": "2026-06-07T14:11:30.700Z",
+    "tags": [
+      "connections",
+      "mysql"
+    ]
+  },
+  {
+    "id": "rule-003",
+    "name": "Weekly REINDEX — analytics-oracle",
+    "description": "Rebuild fragmented indexes on the analytics Oracle schema every Sunday night",
+    "dbId": "db-004",
+    "dbName": "analytics-oracle",
+    "trigger": "cron",
+    "cronExpr": "0 3 * * 0",
+    "cronLabel": "Sundays at 03:00 UTC",
+    "actions": [
+      {
+        "type": "reindex",
+        "sql": "ALTER INDEX ALL ON ANALYTICS.EVENTS REBUILD ONLINE;"
+      }
+    ],
+    "enabled": true,
+    "lastRunAt": "2026-07-08T03:31:30.014Z",
+    "lastRunStatus": "success",
+    "lastRunOutput": "REINDEX completed on analytics-oracle\n5 indexes rebuilt\nAvg fragmentation: 31% → 4%\nDuration: 18.2s",
+    "nextRunAt": "2026-07-11T14:11:30.700Z",
+    "runCount": 15,
+    "createdAt": "2026-04-06T22:11:30.700Z",
+    "tags": [
+      "maintenance",
+      "oracle",
+      "indexes"
+    ]
+  },
+  {
+    "id": "rule-004",
+    "name": "Alert on Slow Query Spike",
+    "description": "Send Slack alert when slow query count exceeds 10 in a 5-minute window",
+    "dbId": "*",
+    "dbName": "All databases",
+    "trigger": "threshold",
+    "thresholdMetric": "slow_query_count",
+    "thresholdOperator": ">",
+    "thresholdValue": 10,
+    "actions": [
+      {
+        "type": "slack_notify",
+        "message": "⚠️ Slow query spike detected: {{count}} slow queries in 5 minutes on {{db}}"
+      },
+      {
+        "type": "email_notify",
+        "message": "Slow query spike on {{db}}: {{count}} queries exceeded threshold"
+      }
+    ],
+    "enabled": true,
+    "lastRunAt": "2026-07-08T05:25:00.256Z",
+    "lastRunStatus": "success",
+    "lastRunOutput": "Threshold breach on labdb-postgres: slow_query_count = 12.0 > 10",
+    "runCount": 8,
+    "createdAt": "2026-06-16T18:11:30.700Z",
+    "tags": [
+      "alerting",
+      "slow-queries"
+    ]
+  },
+  {
+    "id": "rule-005",
+    "name": "MongoDB Compact Collections — app-mongodb",
+    "description": "Run compact command on largest collections to reclaim disk space monthly",
+    "dbId": "db-006",
+    "dbName": "app-mongodb",
+    "trigger": "cron",
+    "cronExpr": "0 4 1 * *",
+    "cronLabel": "1st of month at 04:00 UTC",
+    "actions": [
+      {
+        "type": "custom_sql",
+        "sql": "db.runCommand({ compact: \"events\" })\ndb.runCommand({ compact: \"logs\" })"
+      }
+    ],
+    "enabled": false,
+    "lastRunAt": "2026-06-16T18:11:30.700Z",
+    "lastRunStatus": "failed",
+    "lastRunOutput": "Error: compact requires exclusive lock. Retrying with allowInterrupt...\nFailed after 3 retries",
+    "nextRunAt": "2026-07-20T02:11:30.700Z",
+    "runCount": 3,
+    "createdAt": "2026-05-06T02:11:30.700Z",
+    "tags": [
+      "maintenance",
+      "mongodb",
+      "disk"
+    ]
+  },
+  {
+    "id": "rule-006",
+    "name": "Redis Memory Flush Expired Keys",
+    "description": "Trigger active expiry sweep on Redis when memory exceeds 80%",
+    "dbId": "db-005",
+    "dbName": "cache-redis",
+    "trigger": "threshold",
+    "thresholdMetric": "mem_pct",
+    "thresholdOperator": ">=",
+    "thresholdValue": 80,
+    "actions": [
+      {
+        "type": "custom_sql",
+        "sql": "DEBUG SLEEP 0\nDEBUG JMAP"
+      },
+      {
+        "type": "slack_notify",
+        "message": "🔴 Redis memory ≥80% — triggered active key expiry sweep on cache-redis"
+      }
+    ],
+    "enabled": true,
+    "lastRunAt": "2026-07-05T14:11:30.700Z",
+    "lastRunStatus": "success",
+    "lastRunOutput": "Active expiry sweep triggered\nExpired keys removed: 24,180\nMemory reclaimed: ~180 MB",
+    "runCount": 5,
+    "createdAt": "2026-06-20T22:11:30.700Z",
+    "tags": [
+      "redis",
+      "memory"
+    ]
+  }
+]

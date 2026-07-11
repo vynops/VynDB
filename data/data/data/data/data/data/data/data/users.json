@@ -1,0 +1,21 @@
+[
+  {
+    "id": "26fd4a2a-bdca-40b9-976c-e17d3ea2f9df",
+    "email": "admin@vyndb.local",
+    "name": "Admin",
+    "role": "admin",
+    "passwordHash": "a52828735269788c3b28bc1f7bc3d4ca547de1ff56f66010ad483e5779e5990d",
+    "passwordSalt": "bda9f57baf41c33fc0b9292e2b969352",
+    "createdAt": "2026-07-07T13:40:37.585Z",
+    "lastLogin": "2026-07-08T04:44:45.380Z"
+  },
+  {
+    "id": "9e2ddabe-ffae-4f93-847f-2df9280cbce5",
+    "email": "viewer@vyndb.local",
+    "name": "Viewer",
+    "role": "viewer",
+    "passwordHash": "5eba1096bcbcfacd8c2df77b47aef0ef1b7617fcb9833cf5a1c6ede9782ddbfd",
+    "passwordSalt": "ea7bb858e3b93a2b2f07cd5e064343f9",
+    "createdAt": "2026-07-07T13:40:37.612Z"
+  }
+]

@@ -1,0 +1,110 @@
+[
+  {
+    "id": "run-d35f7781",
+    "ruleId": "rule-003",
+    "startedAt": "2026-07-08T03:31:30.014Z",
+    "completedAt": "2026-07-08T03:31:30.014Z",
+    "status": "success",
+    "output": "REINDEX completed on analytics-oracle\n5 indexes rebuilt\nAvg fragmentation: 31% → 4%\nDuration: 18.2s",
+    "triggeredBy": "manual"
+  },
+  {
+    "id": "run-899a976f",
+    "ruleId": "rule-002",
+    "startedAt": "2026-07-08T03:31:21.820Z",
+    "completedAt": "2026-07-08T03:31:21.820Z",
+    "status": "success",
+    "output": "Scanned connection pool on prod-mysql\nIdle connections found: 7\nKilled: 5 connections\nPool slots freed: 1",
+    "triggeredBy": "manual"
+  },
+  {
+    "id": "run-6a776ebc",
+    "ruleId": "rule-001",
+    "startedAt": "2026-07-08T03:31:10.567Z",
+    "completedAt": "2026-07-08T03:31:10.567Z",
+    "status": "success",
+    "output": "VACUUM ANALYZE on prod-postgres\nTime: 9.0s | Tables scanned: 46 | Dead tuples removed: 60624",
+    "triggeredBy": "manual"
+  },
+  {
+    "id": "run-cbcf5120",
+    "ruleId": "rule-001",
+    "startedAt": "2026-07-08T03:31:08.991Z",
+    "completedAt": "2026-07-08T03:31:08.991Z",
+    "status": "success",
+    "output": "VACUUM ANALYZE on prod-postgres\nTime: 1.3s | Tables scanned: 62 | Dead tuples removed: 156396",
+    "triggeredBy": "manual"
+  },
+  {
+    "id": "run-2274ae7a",
+    "ruleId": "rule-001",
+    "startedAt": "2026-07-08T03:31:08.110Z",
+    "completedAt": "2026-07-08T03:31:08.110Z",
+    "status": "success",
+    "output": "VACUUM ANALYZE on prod-postgres\nTime: 4.4s | Tables scanned: 39 | Dead tuples removed: 128204",
+    "triggeredBy": "manual"
+  },
+  {
+    "id": "run-c688054d",
+    "ruleId": "rule-001",
+    "startedAt": "2026-07-08T03:30:29.320Z",
+    "completedAt": "2026-07-08T03:30:29.321Z",
+    "status": "success",
+    "output": "VACUUM ANALYZE on prod-postgres\nTime: 6.7s | Tables scanned: 50 | Dead tuples removed: 74036",
+    "triggeredBy": "manual"
+  },
+  {
+    "id": "run-001",
+    "ruleId": "rule-001",
+    "startedAt": "2026-07-06T16:11:30.700Z",
+    "completedAt": "2026-07-06T16:15:42.700Z",
+    "status": "success",
+    "output": "VACUUM ANALYZE\nTime: 4.2s | Tables scanned: 47 | Dead tuples removed: 128,440",
+    "triggeredBy": "cron"
+  },
+  {
+    "id": "run-002",
+    "ruleId": "rule-002",
+    "startedAt": "2026-07-07T13:53:30.700Z",
+    "completedAt": "2026-07-07T13:54:06.700Z",
+    "status": "success",
+    "output": "Killed 3 idle connections (IDs: 204, 211, 219)\nPool freed: 3 slots",
+    "triggeredBy": "cron"
+  },
+  {
+    "id": "run-003",
+    "ruleId": "rule-003",
+    "startedAt": "2026-07-04T14:11:30.700Z",
+    "completedAt": "2026-07-04T14:29:30.700Z",
+    "status": "success",
+    "output": "Rebuilt 12 indexes\nAvg fragmentation before: 34% → after: 2%\nDuration: 18.4s",
+    "triggeredBy": "cron"
+  },
+  {
+    "id": "run-004",
+    "ruleId": "rule-005",
+    "startedAt": "2026-06-16T18:11:30.700Z",
+    "completedAt": "2026-06-16T18:17:30.700Z",
+    "status": "failed",
+    "output": "Error: compact requires exclusive lock. Retrying with allowInterrupt...\nFailed after 3 retries",
+    "triggeredBy": "cron"
+  },
+  {
+    "id": "run-005",
+    "ruleId": "rule-001",
+    "startedAt": "2026-07-05T16:11:30.700Z",
+    "completedAt": "2026-07-05T16:16:18.700Z",
+    "status": "success",
+    "output": "VACUUM ANALYZE\nTime: 3.8s | Tables scanned: 47 | Dead tuples removed: 91,200",
+    "triggeredBy": "cron"
+  },
+  {
+    "id": "run-006",
+    "ruleId": "rule-004",
+    "startedAt": "2026-07-07T08:11:30.700Z",
+    "completedAt": "2026-07-07T08:12:06.700Z",
+    "status": "success",
+    "output": "Notification sent to #db-alerts channel\nTrigger: 14 slow queries on prod-postgres in 5 min",
+    "triggeredBy": "threshold"
+  }
+]

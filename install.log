@@ -1,0 +1,13 @@
+npm warn deprecated @types/ioredis@5.0.0: This is a stub types definition. ioredis provides its own type definitions, so you do not need this installed.
+
+added 29 packages, and audited 471 packages in 10s
+
+152 packages are looking for funding
+  run `npm fund` for details
+
+2 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.

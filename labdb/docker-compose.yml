@@ -1,0 +1,158 @@
+networks:
+  labdb:
+    driver: bridge
+
+volumes:
+  pg_primary_data:
+  pg_replica_data:
+  mysql_data:
+  mongo_data:
+  redis_data:
+
+services:
+
+  # ── PostgreSQL 16 Primary ─────────────────────────────────────────────────
+  postgres-primary:
+    image: postgres:16
+    container_name: labdb-pg-primary
+    networks: [labdb]
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: labdb
+      POSTGRES_PASSWORD: "labdb_P@ss2024"
+      POSTGRES_DB: labdb
+    command: >
+      postgres
+        -c wal_level=replica
+        -c max_wal_senders=5
+        -c max_replication_slots=5
+        -c hot_standby=on
+        -c shared_preload_libraries=pg_stat_statements
+        -c pg_stat_statements.track=all
+        -c pg_stat_statements.max=1000
+        -c log_min_duration_statement=100
+    volumes:
+      - pg_primary_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres-hba.sh:/docker-entrypoint-initdb.d/00-hba.sh
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labdb -d labdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
+  # ── PostgreSQL 16 Replica (streaming replication from primary) ────────────
+  postgres-replica:
+    image: postgres:16
+    container_name: labdb-pg-replica
+    networks: [labdb]
+    ports:
+      - "5433:5432"
+    environment:
+      PGPASSWORD: "labdb_P@ss2024"
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        echo "Waiting for primary..."
+        until pg_isready -h postgres-primary -U labdb -d labdb; do sleep 2; done
+        echo "Setting up data directory..."
+        find /var/lib/postgresql/data -mindepth 1 -delete 2>/dev/null || true
+        chown -R postgres:postgres /var/lib/postgresql/data
+        echo "Running pg_basebackup..."
+        export PGPASSWORD="labdb_P@ss2024"
+        gosu postgres pg_basebackup \
+          -h postgres-primary -U labdb \
+          -D /var/lib/postgresql/data -P -Xs -R --checkpoint=fast
+        chmod 700 /var/lib/postgresql/data
+        echo "Starting replica as postgres user..."
+        exec gosu postgres postgres -D /var/lib/postgresql/data \
+          -c hot_standby=on -c hot_standby_feedback=on
+    volumes:
+      - pg_replica_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── MySQL 8.0 ─────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: labdb-mysql
+    networks: [labdb]
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "labdb_P@ss2024"
+      MYSQL_DATABASE: labdb
+      MYSQL_USER: labdb
+      MYSQL_PASSWORD: "labdb_P@ss2024"
+    command: >
+      --slow_query_log=ON
+      --long_query_time=0.1
+      --slow_query_log_file=/var/log/mysql/slow.log
+      --performance_schema=ON
+      --log_bin=mysql-bin
+      --binlog_expire_logs_seconds=604800
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/init-mysql.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-u", "labdb", "-plabdb_P@ss2024"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── MongoDB 7 ─────────────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7
+    container_name: labdb-mongodb
+    networks: [labdb]
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: "labdb_P@ss2024"
+      MONGO_INITDB_DATABASE: labdb
+    volumes:
+      - mongo_data:/data/db
+      - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/01-init.js
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── Redis 7 ───────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: labdb-redis
+    networks: [labdb]
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+        --slowlog-log-slower-than 10000
+        --slowlog-max-len 128
+        --maxmemory 256mb
+        --maxmemory-policy allkeys-lru
+        --loglevel notice
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped

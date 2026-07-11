@@ -1,0 +1,127 @@
+[
+  {
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "totalSizeMB": 123.10842037200928,
+    "dataSizeMB": 92,
+    "indexSizeMB": 25,
+    "freeSizeMB": 6,
+    "growthMBPerDay": 50,
+    "daysUntilFull": 365,
+    "indexBloatPct": 0,
+    "tableBloatPct": 0,
+    "topTables": [
+      {
+        "name": "events",
+        "sizeMB": 75,
+        "growthMBPerDay": 5
+      },
+      {
+        "name": "order_items",
+        "sizeMB": 24,
+        "growthMBPerDay": 5
+      },
+      {
+        "name": "orders",
+        "sizeMB": 10,
+        "growthMBPerDay": 5
+      },
+      {
+        "name": "audit_log",
+        "sizeMB": 5,
+        "growthMBPerDay": 5
+      },
+      {
+        "name": "users",
+        "sizeMB": 2,
+        "growthMBPerDay": 5
+      }
+    ]
+  },
+  {
+    "dbId": "db-lab-pg-replica",
+    "dbName": "labdb-postgres-replica",
+    "totalSizeMB": 123.10842037200928,
+    "dataSizeMB": 92,
+    "indexSizeMB": 25,
+    "freeSizeMB": 6,
+    "growthMBPerDay": 50,
+    "daysUntilFull": 365,
+    "indexBloatPct": 0,
+    "tableBloatPct": 0,
+    "topTables": [
+      {
+        "name": "events",
+        "sizeMB": 75,
+        "growthMBPerDay": 5
+      },
+      {
+        "name": "order_items",
+        "sizeMB": 24,
+        "growthMBPerDay": 5
+      },
+      {
+        "name": "orders",
+        "sizeMB": 10,
+        "growthMBPerDay": 5
+      },
+      {
+        "name": "audit_log",
+        "sizeMB": 5,
+        "growthMBPerDay": 5
+      },
+      {
+        "name": "users",
+        "sizeMB": 2,
+        "growthMBPerDay": 5
+      }
+    ]
+  },
+  {
+    "dbId": "db-lab-mysql",
+    "dbName": "labdb-mysql",
+    "totalSizeMB": 5.59375,
+    "dataSizeMB": 4,
+    "indexSizeMB": 1,
+    "freeSizeMB": 0,
+    "growthMBPerDay": 30,
+    "daysUntilFull": 365,
+    "indexBloatPct": 8,
+    "tableBloatPct": 5,
+    "topTables": [
+      {
+        "sizeMB": 3,
+        "growthMBPerDay": 5
+      },
+      {
+        "sizeMB": 2,
+        "growthMBPerDay": 5
+      },
+      {
+        "sizeMB": 1,
+        "growthMBPerDay": 5
+      },
+      {
+        "sizeMB": 0,
+        "growthMBPerDay": 5
+      },
+      {
+        "sizeMB": 0,
+        "growthMBPerDay": 5
+      }
+    ]
+  },
+  {
+    "dbId": "db-lab-redis",
+    "dbName": "labdb-redis",
+    "totalSizeMB": 256,
+    "dataSizeMB": 1,
+    "indexSizeMB": 0,
+    "freeSizeMB": 255,
+    "growthMBPerDay": 1,
+    "daysUntilFull": 255,
+    "indexBloatPct": 0,
+    "tableBloatPct": 0,
+    "topTables": []
+  }
+]

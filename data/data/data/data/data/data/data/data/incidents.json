@@ -1,0 +1,100 @@
+[
+  {
+    "id": "inc-ac7dd500",
+    "createdAt": "2026-07-08T04:59:27.209Z",
+    "dbId": "db-lab-pg-replica",
+    "dbName": "labdb-postgres-replica",
+    "source": "auto",
+    "title": "Disk critical: labdb-postgres-replica at 95%",
+    "severity": "high",
+    "category": "capacity",
+    "status": "open",
+    "notes": "Auto-raised. Disk 95% used. Free: 6 MB."
+  },
+  {
+    "id": "inc-799bf9cf",
+    "createdAt": "2026-07-08T04:59:27.209Z",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "source": "auto",
+    "title": "Disk critical: labdb-postgres at 95%",
+    "severity": "high",
+    "category": "capacity",
+    "status": "open",
+    "notes": "Auto-raised. Disk 95% used. Free: 6 MB."
+  },
+  {
+    "id": "inc-5fea3601",
+    "createdAt": "2026-07-08T04:59:27.208Z",
+    "dbId": "db-lab-mongodb",
+    "dbName": "labdb-mongodb",
+    "source": "auto",
+    "title": "DB unreachable: labdb-mongodb",
+    "severity": "critical",
+    "category": "availability",
+    "status": "open",
+    "notes": "Auto-raised by monitor. Last checked: 2026-07-08T04:55:00.148Z"
+  },
+  {
+    "id": "inc-001",
+    "dbId": "db-004",
+    "dbName": "analytics-oracle",
+    "title": "Tablespace USERS approaching capacity (82%)",
+    "severity": "high",
+    "category": "capacity",
+    "status": "open",
+    "source": "auto",
+    "createdAt": "2026-07-07T11:40:14.993Z"
+  },
+  {
+    "id": "inc-002",
+    "dbId": "db-004",
+    "dbName": "analytics-oracle",
+    "title": "Multiple failed login attempts — possible brute-force",
+    "severity": "critical",
+    "category": "security",
+    "status": "acknowledged",
+    "source": "auto",
+    "createdAt": "2026-07-07T12:40:14.993Z",
+    "acknowledgedAt": "2026-07-07T12:53:34.993Z",
+    "assignedTo": "admin@vyndb.local",
+    "notes": "IP block applied via firewall. Investigating source."
+  },
+  {
+    "id": "inc-003",
+    "dbId": "db-002",
+    "dbName": "prod-mysql",
+    "title": "Replica lag exceeded 10 seconds",
+    "severity": "medium",
+    "category": "replication",
+    "status": "open",
+    "source": "auto",
+    "createdAt": "2026-07-07T13:10:14.993Z"
+  },
+  {
+    "id": "inc-004",
+    "dbId": "db-004",
+    "dbName": "analytics-oracle",
+    "title": "Backup job failed — RMAN-03002",
+    "severity": "high",
+    "category": "backup",
+    "status": "open",
+    "source": "auto",
+    "createdAt": "2026-07-07T05:40:14.993Z"
+  },
+  {
+    "id": "inc-005",
+    "dbId": "db-001",
+    "dbName": "prod-postgres",
+    "title": "Slow query spike — p99 exceeded 5s",
+    "severity": "medium",
+    "category": "performance",
+    "status": "resolved",
+    "source": "auto",
+    "createdAt": "2026-07-06T13:40:14.993Z",
+    "acknowledgedAt": "2026-07-06T13:50:14.993Z",
+    "resolvedAt": "2026-07-06T14:53:34.993Z",
+    "assignedTo": "admin@vyndb.local",
+    "notes": "Added composite index. Query time back to normal."
+  }
+]

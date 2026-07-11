@@ -1,0 +1,925 @@
+[
+  {
+    "dbId": "db-lab-pg-primary",
+    "schema": "public",
+    "name": "events",
+    "engine": "postgresql",
+    "rowCount": 500000,
+    "sizeMB": 74.9609375,
+    "indexSizeMB": 13.8671875,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false,
+        "default": "nextval('events_id_seq'::regclass)"
+      },
+      {
+        "name": "user_id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "event_type",
+        "type": "character varying",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "page",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "session_id",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "metadata",
+        "type": "jsonb",
+        "nullable": true,
+        "default": "'{}'::jsonb"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "events_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      },
+      {
+        "name": "idx_events_type",
+        "columns": "{event_type}",
+        "unique": false,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.055Z"
+  },
+  {
+    "dbId": "db-lab-pg-primary",
+    "schema": "public",
+    "name": "order_items",
+    "engine": "postgresql",
+    "rowCount": 300000,
+    "sizeMB": 23.7109375,
+    "indexSizeMB": 6.4453125,
+    "columns": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": "nextval('order_items_id_seq'::regclass)"
+      },
+      {
+        "name": "order_id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "product_id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "quantity",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "unit_price",
+        "type": "numeric",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "order_items_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.065Z"
+  },
+  {
+    "dbId": "db-lab-pg-primary",
+    "schema": "public",
+    "name": "orders",
+    "engine": "postgresql",
+    "rowCount": 100000,
+    "sizeMB": 9.5859375,
+    "indexSizeMB": 2.796875,
+    "columns": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": "nextval('orders_id_seq'::regclass)"
+      },
+      {
+        "name": "user_id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "status",
+        "type": "character varying",
+        "nullable": true,
+        "default": "'pending'::character varying"
+      },
+      {
+        "name": "total",
+        "type": "numeric",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "shipped_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "indexes": [
+      {
+        "name": "idx_orders_status",
+        "columns": "{status}",
+        "unique": false,
+        "type": "BTREE"
+      },
+      {
+        "name": "orders_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.070Z"
+  },
+  {
+    "dbId": "db-lab-pg-primary",
+    "schema": "public",
+    "name": "audit_log",
+    "engine": "postgresql",
+    "rowCount": 50000,
+    "sizeMB": 5.15625,
+    "indexSizeMB": 1.0859375,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false,
+        "default": "nextval('audit_log_id_seq'::regclass)"
+      },
+      {
+        "name": "table_name",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "action",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "row_id",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "changed_by",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "changed_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "old_data",
+        "type": "jsonb",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "new_data",
+        "type": "jsonb",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "indexes": [
+      {
+        "name": "audit_log_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.074Z"
+  },
+  {
+    "dbId": "db-lab-pg-primary",
+    "schema": "public",
+    "name": "users",
+    "engine": "postgresql",
+    "rowCount": 10000,
+    "sizeMB": 1.8046875,
+    "indexSizeMB": 0.90625,
+    "columns": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": "nextval('users_id_seq'::regclass)"
+      },
+      {
+        "name": "email",
+        "type": "character varying",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "name",
+        "type": "character varying",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "plan",
+        "type": "character varying",
+        "nullable": true,
+        "default": "'free'::character varying"
+      },
+      {
+        "name": "country",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "users_email_key",
+        "columns": "{email}",
+        "unique": true,
+        "type": "BTREE"
+      },
+      {
+        "name": "users_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.079Z"
+  },
+  {
+    "dbId": "db-lab-pg-primary",
+    "schema": "public",
+    "name": "products",
+    "engine": "postgresql",
+    "rowCount": 2000,
+    "sizeMB": 0.2421875,
+    "indexSizeMB": 0.0625,
+    "columns": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": "nextval('products_id_seq'::regclass)"
+      },
+      {
+        "name": "name",
+        "type": "character varying",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "category",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "price",
+        "type": "numeric",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "stock",
+        "type": "integer",
+        "nullable": true,
+        "default": "0"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "products_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.083Z"
+  },
+  {
+    "dbId": "db-lab-pg-primary",
+    "schema": "public",
+    "name": "sessions",
+    "engine": "postgresql",
+    "rowCount": 0,
+    "sizeMB": 0.015625,
+    "indexSizeMB": 0.0078125,
+    "columns": [
+      {
+        "name": "id",
+        "type": "character varying",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "user_id",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "started_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "last_seen",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "ip",
+        "type": "inet",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "user_agent",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "indexes": [
+      {
+        "name": "sessions_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.086Z"
+  },
+  {
+    "dbId": "db-lab-pg-replica",
+    "schema": "public",
+    "name": "events",
+    "engine": "postgresql",
+    "rowCount": 500000,
+    "sizeMB": 74.9609375,
+    "indexSizeMB": 13.8671875,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false,
+        "default": "nextval('events_id_seq'::regclass)"
+      },
+      {
+        "name": "user_id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "event_type",
+        "type": "character varying",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "page",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "session_id",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "metadata",
+        "type": "jsonb",
+        "nullable": true,
+        "default": "'{}'::jsonb"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "events_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      },
+      {
+        "name": "idx_events_type",
+        "columns": "{event_type}",
+        "unique": false,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.123Z"
+  },
+  {
+    "dbId": "db-lab-pg-replica",
+    "schema": "public",
+    "name": "order_items",
+    "engine": "postgresql",
+    "rowCount": 300000,
+    "sizeMB": 23.7109375,
+    "indexSizeMB": 6.4453125,
+    "columns": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": "nextval('order_items_id_seq'::regclass)"
+      },
+      {
+        "name": "order_id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "product_id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "quantity",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "unit_price",
+        "type": "numeric",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "order_items_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.128Z"
+  },
+  {
+    "dbId": "db-lab-pg-replica",
+    "schema": "public",
+    "name": "orders",
+    "engine": "postgresql",
+    "rowCount": 100000,
+    "sizeMB": 9.5859375,
+    "indexSizeMB": 2.796875,
+    "columns": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": "nextval('orders_id_seq'::regclass)"
+      },
+      {
+        "name": "user_id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "status",
+        "type": "character varying",
+        "nullable": true,
+        "default": "'pending'::character varying"
+      },
+      {
+        "name": "total",
+        "type": "numeric",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "shipped_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "indexes": [
+      {
+        "name": "idx_orders_status",
+        "columns": "{status}",
+        "unique": false,
+        "type": "BTREE"
+      },
+      {
+        "name": "orders_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.132Z"
+  },
+  {
+    "dbId": "db-lab-pg-replica",
+    "schema": "public",
+    "name": "audit_log",
+    "engine": "postgresql",
+    "rowCount": 50000,
+    "sizeMB": 5.15625,
+    "indexSizeMB": 1.0859375,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false,
+        "default": "nextval('audit_log_id_seq'::regclass)"
+      },
+      {
+        "name": "table_name",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "action",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "row_id",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "changed_by",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "changed_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "old_data",
+        "type": "jsonb",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "new_data",
+        "type": "jsonb",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "indexes": [
+      {
+        "name": "audit_log_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.134Z"
+  },
+  {
+    "dbId": "db-lab-pg-replica",
+    "schema": "public",
+    "name": "users",
+    "engine": "postgresql",
+    "rowCount": 10000,
+    "sizeMB": 1.8046875,
+    "indexSizeMB": 0.90625,
+    "columns": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": "nextval('users_id_seq'::regclass)"
+      },
+      {
+        "name": "email",
+        "type": "character varying",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "name",
+        "type": "character varying",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "plan",
+        "type": "character varying",
+        "nullable": true,
+        "default": "'free'::character varying"
+      },
+      {
+        "name": "country",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "users_email_key",
+        "columns": "{email}",
+        "unique": true,
+        "type": "BTREE"
+      },
+      {
+        "name": "users_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.137Z"
+  },
+  {
+    "dbId": "db-lab-pg-replica",
+    "schema": "public",
+    "name": "products",
+    "engine": "postgresql",
+    "rowCount": 2000,
+    "sizeMB": 0.2421875,
+    "indexSizeMB": 0.0625,
+    "columns": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": "nextval('products_id_seq'::regclass)"
+      },
+      {
+        "name": "name",
+        "type": "character varying",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "category",
+        "type": "character varying",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "price",
+        "type": "numeric",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "stock",
+        "type": "integer",
+        "nullable": true,
+        "default": "0"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "products_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.140Z"
+  },
+  {
+    "dbId": "db-lab-pg-replica",
+    "schema": "public",
+    "name": "sessions",
+    "engine": "postgresql",
+    "rowCount": 0,
+    "sizeMB": 0.015625,
+    "indexSizeMB": 0.0078125,
+    "columns": [
+      {
+        "name": "id",
+        "type": "character varying",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "user_id",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "started_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "last_seen",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "ip",
+        "type": "inet",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "user_agent",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "indexes": [
+      {
+        "name": "sessions_pkey",
+        "columns": "{id}",
+        "unique": true,
+        "type": "BTREE"
+      }
+    ],
+    "lastAnalyzed": "2026-07-08T05:55:00.143Z"
+  },
+  {
+    "dbId": "db-lab-mysql",
+    "schema": "labdb",
+    "engine": "mysql",
+    "rowCount": 0,
+    "sizeMB": 2.515625,
+    "indexSizeMB": 0,
+    "columns": [],
+    "indexes": [],
+    "lastAnalyzed": "2026-07-08T05:55:00.161Z"
+  },
+  {
+    "dbId": "db-lab-mysql",
+    "schema": "labdb",
+    "engine": "mysql",
+    "rowCount": 0,
+    "sizeMB": 1.96875,
+    "indexSizeMB": 0.453125,
+    "columns": [],
+    "indexes": [],
+    "lastAnalyzed": "2026-07-08T05:55:00.163Z"
+  },
+  {
+    "dbId": "db-lab-mysql",
+    "schema": "labdb",
+    "engine": "mysql",
+    "rowCount": 0,
+    "sizeMB": 0.9375,
+    "indexSizeMB": 0.53125,
+    "columns": [],
+    "indexes": [],
+    "lastAnalyzed": "2026-07-08T05:55:00.165Z"
+  },
+  {
+    "dbId": "db-lab-mysql",
+    "schema": "labdb",
+    "engine": "mysql",
+    "rowCount": 0,
+    "sizeMB": 0.140625,
+    "indexSizeMB": 0.046875,
+    "columns": [],
+    "indexes": [],
+    "lastAnalyzed": "2026-07-08T05:55:00.168Z"
+  },
+  {
+    "dbId": "db-lab-mysql",
+    "schema": "labdb",
+    "engine": "mysql",
+    "rowCount": 0,
+    "sizeMB": 0.03125,
+    "indexSizeMB": 0.015625,
+    "columns": [],
+    "indexes": [],
+    "lastAnalyzed": "2026-07-08T05:55:00.170Z"
+  }
+]

@@ -1,0 +1,206 @@
+[
+  {
+    "id": "q-001",
+    "dbId": "db-001",
+    "dbName": "prod-postgres",
+    "engine": "postgresql",
+    "query": "SELECT u.*, o.* FROM users u JOIN orders o ON u.id = o.user_id WHERE o.created_at > $1 ORDER BY o.total DESC",
+    "durationMs": 4820,
+    "rowsExamined": 2400000,
+    "rowsReturned": 1240,
+    "executedAt": "2026-07-07T13:35:14.944Z",
+    "analyzed": false
+  },
+  {
+    "id": "q-002",
+    "dbId": "db-002",
+    "dbName": "prod-mysql",
+    "engine": "mysql",
+    "query": "SELECT * FROM order_items WHERE product_id IN (SELECT id FROM products WHERE category = \"electronics\") AND status != \"cancelled\"",
+    "durationMs": 7340,
+    "rowsExamined": 8900000,
+    "rowsReturned": 3420,
+    "executedAt": "2026-07-07T13:25:14.944Z",
+    "analyzed": true,
+    "aiAnalysis": {
+      "explanation": "Full table scan on order_items due to correlated subquery. The subquery runs once per outer row, creating an O(n²) complexity.",
+      "bottleneck": "Missing composite index on (product_id, status) in order_items table",
+      "suggestions": [
+        "Replace the subquery with a JOIN for better optimizer visibility",
+        "Add a composite index on order_items (product_id, status)",
+        "Consider a partial index filtering out \"cancelled\" rows"
+      ],
+      "estimatedGain": "85–95% reduction in query time",
+      "indexSuggestions": [
+        "CREATE INDEX CONCURRENTLY idx_order_items_product_status ON order_items (product_id, status) WHERE status != 'cancelled';"
+      ],
+      "confidence": 92
+    }
+  },
+  {
+    "id": "q-003",
+    "dbId": "db-001",
+    "dbName": "prod-postgres",
+    "engine": "postgresql",
+    "query": "UPDATE sessions SET last_active = NOW() WHERE token = $1",
+    "durationMs": 2150,
+    "executedAt": "2026-07-07T13:10:14.944Z",
+    "analyzed": false
+  },
+  {
+    "id": "q-004",
+    "dbId": "db-004",
+    "dbName": "analytics-oracle",
+    "engine": "oracle",
+    "query": "SELECT /*+ FULL(t) */ t.region, SUM(t.amount) FROM transactions t WHERE t.created_date BETWEEN :1 AND :2 GROUP BY t.region",
+    "durationMs": 12800,
+    "rowsExamined": 45000000,
+    "rowsReturned": 24,
+    "executedAt": "2026-07-07T12:40:14.944Z",
+    "analyzed": false
+  },
+  {
+    "id": "q-005",
+    "dbId": "db-006",
+    "dbName": "app-mongodb",
+    "engine": "mongodb",
+    "query": "db.events.find({ userId: ObjectId(\"...\"), type: { $in: [\"click\",\"view\",\"purchase\"] }, ts: { $gte: ISODate(\"2026-01-01\") } }).sort({ ts: -1 })",
+    "durationMs": 3670,
+    "rowsExamined": 1200000,
+    "rowsReturned": 5600,
+    "executedAt": "2026-07-07T11:40:14.944Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary--3963300807853410596",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "INSERT INTO events (user_id, event_type, page, session_id, created_at, metadata)\r\nSELECT\r\n  floor(random() * $1 + $2)::int,\r\n  (ARRAY[$3,$4,$5,$6,$7,$8,$9])[floor(random()*$10+$11)],\r\n  $12 || floor(random() * $13 + $14),\r\n  md5(random()::text),\r\n  NOW() - (random() * interval $15),\r\n  jsonb_build_object($16, (ARRAY[$17,$18,$19])[floor(random()*$20+$21)])\r\nFROM generate_series($22, $23) AS gs(i)",
+    "durationMs": 5009,
+    "rowsReturned": 500000,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary-7391681687875183497",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "INSERT INTO order_items (order_id, product_id, quantity, unit_price)\r\nSELECT\r\n  floor(random() * $1 + $2)::int,\r\n  floor(random() * $3 + $4)::int,\r\n  floor(random() * $5 + $6)::int,\r\n  round((random() * $7 + $8)::numeric, $9)\r\nFROM generate_series($10, $11) AS gs(i)",
+    "durationMs": 1645,
+    "rowsReturned": 300000,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary--2226645216956610494",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "INSERT INTO orders (user_id, status, total, created_at, shipped_at)\r\nSELECT\r\n  floor(random() * $1 + $2)::int,\r\n  (ARRAY[$3,$4,$5,$6,$7])[floor(random()*$8+$9)],\r\n  round((random() * $10 + $11)::numeric, $12),\r\n  NOW() - (random() * interval $13),\r\n  CASE WHEN random() > $14 THEN NOW() - (random() * interval $15) ELSE $16 END\r\nFROM generate_series($17, $18) AS gs(i)",
+    "durationMs": 768,
+    "rowsReturned": 100000,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary-6755332154274058802",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "ANALYZE users, products, orders, order_items, events, sessions, audit_log",
+    "durationMs": 452,
+    "rowsReturned": 0,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary--4003049544887137136",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "INSERT INTO audit_log (table_name, action, row_id, changed_by, changed_at)\r\nSELECT\r\n  (ARRAY[$1,$2,$3])[floor(random()*$4+$5)],\r\n  (ARRAY[$6,$7,$8])[floor(random()*$9+$10)],\r\n  floor(random() * $11 + $12)::int,\r\n  $13 || floor(random()*$14+$15) || $16,\r\n  NOW() - (random() * interval $17)\r\nFROM generate_series($18, $19) AS gs(i)",
+    "durationMs": 191,
+    "rowsReturned": 50000,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary--384600280206358733",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "CREATE DATABASE \"labdb\"",
+    "durationMs": 91,
+    "rowsReturned": 0,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary-7897027633160757695",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "DO $$\r\nBEGIN\r\n  -- Full scan on orders (no user_id index)\r\n  PERFORM COUNT(*) FROM orders o JOIN users u ON u.id = o.user_id WHERE u.plan = 'enterprise';\r\n  -- Full scan on events (no compound index)\r\n  PERFORM COUNT(*) FROM events WHERE user_id < 100 AND created_at > NOW() - interval '30 days';\r\n  -- Aggregation without index\r\n  PERFORM user_id, COUNT(*), SUM(total) FROM orders GROUP BY user_id HAVING COUNT(*) > 5 LIMIT 100;\r\nEND $$",
+    "durationMs": 87,
+    "rowsReturned": 0,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary-5796097827150374159",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "INSERT INTO users (email, name, plan, country, created_at)\r\nSELECT\r\n  $1 || i || $2,\r\n  $3 || i,\r\n  (ARRAY[$4,$5,$6])[floor(random()*$7+$8)],\r\n  (ARRAY[$9,$10,$11,$12,$13,$14,$15,$16,$17,$18])[floor(random()*$19+$20)],\r\n  NOW() - (random() * interval $21)\r\nFROM generate_series($22, $23) AS gs(i)",
+    "durationMs": 82,
+    "rowsReturned": 10000,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary-543402621096655635",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "COPY public.events (id, user_id, event_type, page, session_id, created_at, metadata) TO stdout",
+    "durationMs": 2249,
+    "rowsReturned": 500000,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary-8041496165644631790",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "COPY public.order_items (id, order_id, product_id, quantity, unit_price, created_at) TO stdout",
+    "durationMs": 698,
+    "rowsReturned": 300000,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary--2713901791507540206",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "COPY public.orders (id, user_id, status, total, created_at, shipped_at) TO stdout",
+    "durationMs": 465,
+    "rowsReturned": 100000,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  },
+  {
+    "id": "sq-pg-db-lab-pg-primary-4796340485999552533",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "query": "COPY public.audit_log (id, table_name, action, row_id, changed_by, changed_at, old_data, new_data) TO stdout",
+    "durationMs": 153,
+    "rowsReturned": 50000,
+    "executedAt": "2026-07-08T05:30:00.055Z",
+    "analyzed": false
+  }
+]

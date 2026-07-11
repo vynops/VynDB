@@ -1,0 +1,45 @@
+
+> vyndb@0.1.0 build
+> next build
+
+▲ Next.js 16.2.10 (Turbopack)
+- Environments: .env.local
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 2 errors:
+./src/app/(dashboard)/sla/page.tsx:33:51
+Expected ';', '}' or <eof>
+  [90m31 |[0m ...(inc.acknowledgedAt) {
+  [90m32 |[0m ...[36monst[0m ackMin = ([36mnew[0m [33mDate[0m(inc.acknowledgedAt).getTime() - [36mnew[0m [33mDate[0m(inc.createdAt).getTime...
+[31m[1m>[0m [90m33 |[0m ...[36mf[0m (ackMin <= target.ackMinutes) ackMet++ [36melse[0m ackBreaches++
+  [90m   |[0m                                             [31m[1m^^^^[0m
+  [90m34 |[0m ...[36mlse[0m [36mif[0m (ageMin > target.ackMinutes && inc.status !== [32m'resolved'[0m) {
+  [90m35 |[0m ...ckBreaches++
+  [90m36 |[0m ...
+
+Parsing ecmascript source code failed
+
+
+./src/lib/db-store.ts:191:33
+Expected ';', '}' or <eof>
+  [90m189 |[0m   [36mconst[0m list = loadDatabases()
+  [90m190 |[0m   [36mconst[0m idx = list.findIndex(d => d.id === db.id)
+[31m[1m>[0m [90m191 |[0m   [36mif[0m (idx === -[35m1[0m) list.push(db) [36melse[0m list[idx] = db
+  [90m    |[0m                                 [31m[1m^^^^[0m
+  [90m192 |[0m   save([32m'databases.json'[0m, list)
+  [90m193 |[0m }
+  [90m194 |[0m
+
+Parsing ecmascript source code failed
+
+Import trace:
+  App Route:
+    ./src/lib/db-store.ts
+    ./src/app/api/slow-queries/[id]/analyze/route.ts
+
+
+    at <unknown> (./src/app/(dashboard)/sla/page.tsx:33:51)
+    at <unknown> (./src/lib/db-store.ts:191:33)

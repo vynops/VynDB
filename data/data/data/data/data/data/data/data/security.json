@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sec-pg-su-db-lab-pg-primary-labdb",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "severity": "high",
+    "category": "privilege",
+    "title": "Superuser login role: labdb",
+    "description": "Role 'labdb' has SUPERUSER + LOGIN. All-privilege role used for application access.",
+    "recommendation": "Create a least-privilege role: REVOKE SUPERUSER FROM labdb;",
+    "detectedAt": "2026-07-08T04:35:00.182Z",
+    "status": "open"
+  },
+  {
+    "id": "sec-pg-ssl-db-lab-pg-primary",
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "severity": "medium",
+    "category": "encryption",
+    "title": "SSL not enabled",
+    "description": "PostgreSQL SSL is off. All connections are unencrypted.",
+    "recommendation": "Set ssl=on in postgresql.conf and restart.",
+    "detectedAt": "2026-07-08T04:35:00.182Z",
+    "status": "open"
+  },
+  {
+    "id": "sec-pg-su-db-lab-pg-replica-labdb",
+    "dbId": "db-lab-pg-replica",
+    "dbName": "labdb-postgres-replica",
+    "severity": "high",
+    "category": "privilege",
+    "title": "Superuser login role: labdb",
+    "description": "Role 'labdb' has SUPERUSER + LOGIN. All-privilege role used for application access.",
+    "recommendation": "Create a least-privilege role: REVOKE SUPERUSER FROM labdb;",
+    "detectedAt": "2026-07-08T04:35:00.263Z",
+    "status": "open"
+  },
+  {
+    "id": "sec-pg-ssl-db-lab-pg-replica",
+    "dbId": "db-lab-pg-replica",
+    "dbName": "labdb-postgres-replica",
+    "severity": "medium",
+    "category": "encryption",
+    "title": "SSL not enabled",
+    "description": "PostgreSQL SSL is off. All connections are unencrypted.",
+    "recommendation": "Set ssl=on in postgresql.conf and restart.",
+    "detectedAt": "2026-07-08T04:35:00.263Z",
+    "status": "open"
+  },
+  {
+    "id": "sec-redis-noauth-db-lab-redis",
+    "dbId": "db-lab-redis",
+    "dbName": "labdb-redis",
+    "severity": "high",
+    "category": "auth",
+    "title": "Redis running without authentication",
+    "description": "No requirepass is set. Any client on the network can access this Redis instance.",
+    "recommendation": "Set requirepass in redis.conf or start with --requirepass <strong_password>.",
+    "detectedAt": "2026-07-08T04:35:00.350Z",
+    "status": "open"
+  }
+]

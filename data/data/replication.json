@@ -1,0 +1,22 @@
+[
+  {
+    "dbId": "db-lab-pg-primary",
+    "dbName": "labdb-postgres",
+    "engine": "postgresql",
+    "role": "primary",
+    "lagSeconds": 0,
+    "connectedReplicas": 1,
+    "lastSyncAt": "2026-07-08T06:10:00.060Z",
+    "status": "healthy"
+  },
+  {
+    "dbId": "db-lab-pg-replica",
+    "dbName": "labdb-postgres-replica",
+    "engine": "postgresql",
+    "role": "replica",
+    "lagSeconds": 7.974,
+    "syncState": "streaming",
+    "lastSyncAt": "2026-07-08T06:10:00.107Z",
+    "status": "warning"
+  }
+]
