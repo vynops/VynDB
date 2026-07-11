@@ -407,7 +407,7 @@ GROQ_API_KEY=gsk_...   # optional if set in app settings
 
 | User | Email | Password | Role |
 |---|---|---|---|
-| Admin | `admin@vyndb.local` | `admin123` | Full access |
+| Admin | `admin@vyndb.local` | `changeme` | Full access |
 | Viewer | `viewer@vyndb.local` | `viewer123` | Read-only |
 
 > **Change these immediately in production** via Settings → Team.
