@@ -5,7 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
-  title: 'VynDB – AI-Powered Database Operations',
+  title: 'VynDB - VynOps Suite',
   description: 'Unified database monitoring, AI query analysis, incident management, and operations across PostgreSQL, MySQL, Oracle, SQL Server, MongoDB, Redis, and CouchBase.',
 }
 

@@ -3,3 +3,9 @@ node_modules/
 .env.local
 *.tsbuildinfo
 data/*.json
+
+# Database backup files - local/runtime only
+backups/
+
+# Database backup files - local/runtime only
+backups/
