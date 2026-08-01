@@ -12,26 +12,6 @@ const mongos     = new Map<string, MongoClient>()
 const redises    = new Map<string, Redis>()
 const mssqlPools = new Map<string, mssql.ConnectionPool>()
 
-function getCouchbaseBaseUrl(db: DbConnection): string {
-  const protocol = db.ssl ? 'https' : 'http'
-  return `${protocol}://${db.host}:${db.port}`
-}
-
-async function fetchCouchbaseJson<T>(db: DbConnection, apiPath: string): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' }
-  if (db.username) {
-    const auth = Buffer.from(`${db.username}:${db.passwordEnc}`).toString('base64')
-    headers.Authorization = `Basic ${auth}`
-  }
-
-  const url = `${getCouchbaseBaseUrl(db)}${apiPath}`
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(5000) })
-  if (!res.ok) {
-    throw new Error(`Couchbase API ${apiPath} failed (${res.status})`)
-  }
-  return await res.json() as T
-}
-
 export async function getPgPool(db: DbConnection): Promise<Pool | null> {
   if (pgPools.has(db.id)) return pgPools.get(db.id)!
   try {
@@ -166,11 +146,6 @@ export async function testConnection(db: DbConnection): Promise<{ ok: boolean; m
         const result = await pool.request().query('SELECT @@VERSION AS v')
         const ver = (result.recordset[0]?.v as string ?? '').split('\n')[0].trim()
         return { ok: true, message: 'Connected', version: ver.substring(0, 50) }
-      }
-      case 'couchbase': {
-        const info = await fetchCouchbaseJson<{ implementationVersion?: string; nodes?: Array<{ version?: string }> }>(db, '/pools/default')
-        const version = info.implementationVersion || info.nodes?.[0]?.version || 'Couchbase'
-        return { ok: true, message: 'Connected', version }
       }
       default:
         return { ok: false, message: `Engine '${db.engine}' not yet supported for real connections` }

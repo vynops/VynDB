@@ -19,29 +19,61 @@ interface NavItem {
   badge?: string
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { href: '/overview',     label: 'Overview',          icon: LayoutDashboard },
-  { href: '/databases',    label: 'Databases',         icon: Database },
-  { href: '/queries',      label: 'Query Analyzer',    icon: Search },
-  { href: '/slow-queries', label: 'Slow Queries',      icon: Zap },
-  { href: '/performance',  label: 'Performance',       icon: Activity },
-  { href: '/schema',       label: 'Schema Explorer',   icon: Table2 },
-  { href: '/backups',      label: 'Backups',           icon: HardDrive },
-  { href: '/replication',  label: 'Replication & HA',  icon: GitBranch },
-  { href: '/capacity',     label: 'Capacity',          icon: BarChart3 },
-  { href: '/security',     label: 'Security',          icon: Shield },
-  { href: '/incidents',    label: 'Incidents',         icon: AlertTriangle },
-  { href: '/oncall',       label: 'On-Call',           icon: Phone },
-  { href: '/routing',      label: 'Routing',           icon: GitMerge },
-  { href: '/sla',          label: 'SLA Tracker',       icon: Timer },
-  { href: '/copilot',      label: 'AI Copilot',        icon: Bot },
-  { href: '/automation',   label: 'Automation',         icon: Terminal },
-  { href: '/autonomous',   label: 'Autonomous Ops',     icon: Brain },
-]
+interface NavSection {
+  title: string
+  items: NavItem[]
+}
 
-const BOTTOM_ITEMS: NavItem[] = [
-  { href: '/team',     label: 'Team',     icon: Users },
-  { href: '/settings', label: 'Settings', icon: Settings },
+const NAV_SECTIONS: NavSection[] = [
+  {
+    title: 'Fleet',
+    items: [
+      { href: '/overview',  label: 'Overview',  icon: LayoutDashboard },
+      { href: '/databases', label: 'Databases', icon: Database },
+    ],
+  },
+  {
+    title: 'Observe',
+    items: [
+      { href: '/performance',  label: 'Performance',      icon: Activity },
+      { href: '/slow-queries', label: 'Slow Queries',     icon: Zap },
+      { href: '/replication',  label: 'Replication & HA', icon: GitBranch },
+      { href: '/capacity',     label: 'Capacity',         icon: BarChart3 },
+      { href: '/schema',       label: 'Schema Explorer',  icon: Table2 },
+    ],
+  },
+  {
+    title: 'Optimize',
+    items: [
+      { href: '/queries',    label: 'Query Analyzer', icon: Search },
+      { href: '/copilot',    label: 'AI Copilot',     icon: Bot },
+      { href: '/autonomous', label: 'Autonomous Ops', icon: Brain },
+    ],
+  },
+  {
+    title: 'Operate',
+    items: [
+      { href: '/backups',    label: 'Backups',     icon: HardDrive },
+      { href: '/incidents',  label: 'Incidents',   icon: AlertTriangle },
+      { href: '/oncall',     label: 'On-Call',     icon: Phone },
+      { href: '/routing',    label: 'Routing',     icon: GitMerge },
+      { href: '/sla',        label: 'SLA Tracker', icon: Timer },
+      { href: '/automation', label: 'Automation',  icon: Terminal },
+    ],
+  },
+  {
+    title: 'Govern',
+    items: [
+      { href: '/security', label: 'Security', icon: Shield },
+    ],
+  },
+  {
+    title: 'Admin',
+    items: [
+      { href: '/team',     label: 'Team',     icon: Users },
+      { href: '/settings', label: 'Settings', icon: Settings },
+    ],
+  },
 ]
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -63,6 +95,19 @@ function NavLink({ item, active, onClick }: { item: NavItem; active: boolean; on
       )}
       {active && <ChevronRight className="w-3 h-3 text-emerald-500" />}
     </Link>
+  )
+}
+
+function NavSectionBlock({ section, pathname, onClose }: { section: NavSection; pathname: string; onClose?: () => void }) {
+  return (
+    <div className="space-y-0.5">
+      <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wider font-bold text-slate-600">
+        {section.title}
+      </div>
+      {section.items.map(item => (
+        <NavLink key={item.href} item={item} active={pathname === item.href} onClick={onClose} />
+      ))}
+    </div>
   )
 }
 
@@ -95,13 +140,12 @@ function SidebarContent({ pathname, onClose }: { pathname: string; onClose?: () 
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {NAV_ITEMS.map(item => (
-          <NavLink key={item.href} item={item} active={pathname === item.href} onClick={onClose} />
-        ))}
-        <div className="border-t border-slate-800/60 my-2" />
-        {BOTTOM_ITEMS.map(item => (
-          <NavLink key={item.href} item={item} active={pathname === item.href} onClick={onClose} />
+      <nav className="flex-1 overflow-y-auto px-3 py-3">
+        {NAV_SECTIONS.map((section, idx) => (
+          <div key={section.title}>
+            {idx > 0 && <div className="border-t border-slate-800/60 my-2" />}
+            <NavSectionBlock section={section} pathname={pathname} onClose={onClose} />
+          </div>
         ))}
       </nav>
 

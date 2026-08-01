@@ -38,11 +38,13 @@ export default function Header({ title, subtitle }: { title: string; subtitle: s
         </Link>
         <button
           onClick={handleLogout}
-          className="p-2 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors"
           title="Log out">
           <LogOut size={15} />
+          <span className="text-sm font-medium">Databases</span>
         </button>
       </div>
     </header>
   )
 }
+
