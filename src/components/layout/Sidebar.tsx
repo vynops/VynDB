@@ -43,22 +43,22 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'Optimize',
+    title: 'AIOps',
     items: [
-      { href: '/queries',    label: 'Query Analyzer', icon: Search },
       { href: '/copilot',    label: 'AI Copilot',     icon: Bot },
       { href: '/autonomous', label: 'Autonomous Ops', icon: Brain },
+      { href: '/automation', label: 'Automation',     icon: Terminal },
     ],
   },
   {
     title: 'Operate',
     items: [
-      { href: '/backups',    label: 'Backups',     icon: HardDrive },
-      { href: '/incidents',  label: 'Incidents',   icon: AlertTriangle },
-      { href: '/oncall',     label: 'On-Call',     icon: Phone },
-      { href: '/routing',    label: 'Routing',     icon: GitMerge },
-      { href: '/sla',        label: 'SLA Tracker', icon: Timer },
-      { href: '/automation', label: 'Automation',  icon: Terminal },
+      { href: '/queries',    label: 'Query Analyzer', icon: Search },
+      { href: '/backups',    label: 'Backups',        icon: HardDrive },
+      { href: '/incidents',  label: 'Incidents',      icon: AlertTriangle },
+      { href: '/oncall',     label: 'On-Call',        icon: Phone },
+      { href: '/routing',    label: 'Routing',        icon: GitMerge },
+      { href: '/sla',        label: 'SLA Tracker',    icon: Timer },
     ],
   },
   {
@@ -202,3 +202,4 @@ export default function Sidebar() {
     </>
   )
 }
+
