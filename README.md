@@ -637,6 +637,9 @@ This is normal if your lab database host has real low disk space. The monitor on
 | **VynDB** | Database operations | [vynops/VynDB](https://github.com/vynops/VynDB) |
 | **VynDC** | Data center management | [vynops/VynDC](https://github.com/vynops/VynDC) |
 | **VynCICD** | CI/CD pipeline management | [vynops/VynCICD](https://github.com/vynops/VynCICD) |
+| **VynHana** | SAP HANA Database management | [vynops/VynHana](https://github.com/vynops/VynHana) |
+| **VynSAP** | SAP ERP management | [vynops/VynSAP](https://github.com/vynops/VynSAP) |
+
 
 ---
 
