@@ -610,14 +610,6 @@ This is normal if your lab database host has real low disk space. The monitor on
 
 ---
 
-## Related Projects
-
-| Project | Description | URL |
-|---|---|---|
-| **VynOps** | AI-powered Kubernetes operations platform | [vynops.online](https://vynops.online) |
-| **VynDC** | Data centre & hybrid infrastructure operations | [dc.vynops.online](https://dc.vynops.online) |
-
----
 
 ## Contributing
 
