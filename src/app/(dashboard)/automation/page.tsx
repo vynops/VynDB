@@ -5,9 +5,10 @@ import useSWR from 'swr'
 import {
   Play, Plus, Trash2, ToggleLeft, ToggleRight, Clock, Zap, AlertTriangle,
   CheckCircle, XCircle, Loader2, ChevronDown, ChevronRight, History, X,
-  Database, Terminal,
+  Database, Terminal, Eye,
 } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -136,8 +137,9 @@ function RunHistoryPanel({ runs, ruleId }: { runs: AutomationRun[]; ruleId: stri
 }
 
 export default function AutomationPage() {
+  const refreshInterval = useAppRefreshInterval(30)
   const { data: rules = [], mutate: mutateRules } = useSWR<AutomationRule[]>('/api/automation', fetcher)
-  const { data: runs = [] } = useSWR<AutomationRun[]>('/api/automation/runs', fetcher, { refreshInterval: 10000 })
+  const { data: runs = [] } = useSWR<AutomationRun[]>('/api/automation/runs', fetcher, { refreshInterval })
   const { data: dbs = [] } = useSWR<{ id: string; name: string }[]>('/api/databases', fetcher)
 
   const [showModal, setShowModal] = useState(false)
@@ -149,6 +151,7 @@ export default function AutomationPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [runOutput, setRunOutput] = useState<{ id: string; output: string } | null>(null)
+  const [dryRunOutput, setDryRunOutput] = useState<{ id: string; output: string } | null>(null)
 
   const stats = {
     total: rules.length,
@@ -201,6 +204,15 @@ export default function AutomationPage() {
       const data = await res.json()
       setRunOutput({ id, output: data.output ?? 'Completed' })
       mutateRules()
+    } finally { setRunningId(null) }
+  }
+
+  const handleDryRun = async (id: string) => {
+    setConfirmRun(null); setRunningId(id)
+    try {
+      const res = await fetch(`/api/automation/${id}/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dryRun: true }) })
+      const data = await res.json()
+      setDryRunOutput({ id, output: data.output ?? 'No executable action configured.' })
     } finally { setRunningId(null) }
   }
 
@@ -333,6 +345,13 @@ export default function AutomationPage() {
                 </div>
               )}
 
+              {dryRunOutput?.id === rule.id && (
+                <div className="mx-4 mb-3 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                  <div className="flex items-center justify-between mb-1"><span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Dry Run · no changes applied</span><button onClick={() => setDryRunOutput(null)} className="text-slate-600 hover:text-slate-400"><X size={11} /></button></div>
+                  <pre className="text-[11px] text-blue-200/80 font-mono whitespace-pre-wrap">{dryRunOutput.output}</pre>
+                </div>
+              )}
+
               {/* Expanded Run History */}
               {isExpanded && (
                 <div className="border-t border-slate-800/40">
@@ -390,10 +409,14 @@ export default function AutomationPage() {
                   className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors">
                   Cancel
                 </button>
+                <button onClick={() => handleDryRun(confirmRun.id)} disabled={runningId === confirmRun.id}
+                  className="flex-1 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 font-semibold transition-colors flex items-center justify-center gap-2">
+                  <Eye size={13} /> Dry Run
+                </button>
                 <button onClick={() => handleRunNow(confirmRun.id)} disabled={runningId === confirmRun.id}
                   className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                   {runningId === confirmRun.id ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
-                  Run Now
+                  Execute
                 </button>
               </div>
             </div>

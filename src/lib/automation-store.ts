@@ -12,7 +12,10 @@ function load<T>(file: string, def: T): T {
 }
 function save<T>(file: string, data: T) {
   ensureDir()
-  fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2), 'utf8')
+  const target = path.join(DATA_DIR, file)
+  const temp = `${target}.${process.pid}.tmp`
+  fs.writeFileSync(temp, JSON.stringify(data, null, 2), 'utf8')
+  fs.renameSync(temp, target)
 }
 
 // ────────── Types ──────────
@@ -119,19 +122,6 @@ const DEMO_RULES: AutomationRule[] = [
     enabled: true,
     lastRunAt: hoursAgo(0.3), lastRunStatus: 'success', lastRunOutput: 'Killed 3 idle connections (IDs: 204, 211, 219)\nPool freed: 3 slots',
     nextRunAt: nextHour(0.25), runCount: 192, createdAt: hoursAgo(720), tags: ['connections', 'mysql'],
-  },
-  {
-    id: 'rule-003',
-    name: 'Weekly REINDEX — analytics-oracle',
-    description: 'Rebuild fragmented indexes on the analytics Oracle schema every Sunday night',
-    dbId: 'db-004', dbName: 'analytics-oracle',
-    trigger: 'cron', cronExpr: '0 3 * * 0', cronLabel: 'Sundays at 03:00 UTC',
-    actions: [
-      { type: 'reindex', sql: 'ALTER INDEX ALL ON ANALYTICS.EVENTS REBUILD ONLINE;' },
-    ],
-    enabled: true,
-    lastRunAt: hoursAgo(72), lastRunStatus: 'success', lastRunOutput: 'Rebuilt 12 indexes\nAvg fragmentation before: 34% → after: 2%\nDuration: 18.4s',
-    nextRunAt: nextHour(96), runCount: 14, createdAt: hoursAgo(2200), tags: ['maintenance', 'oracle', 'indexes'],
   },
   {
     id: 'rule-004',

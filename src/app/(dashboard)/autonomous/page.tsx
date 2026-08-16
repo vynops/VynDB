@@ -93,7 +93,7 @@ export default function AutonomousPage() {
   const handleApprove = async (id: string) => {
     setApprovingId(id)
     try {
-      const res = await fetch(`/api/autonomous/${id}/approve`, { method: 'POST' })
+      const res = await fetch(`/api/autonomous/${id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) })
       const data = await res.json()
       setApproveResult({ id, output: data.output ?? 'Executed successfully' })
       mutate()

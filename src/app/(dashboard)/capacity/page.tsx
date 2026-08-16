@@ -4,6 +4,7 @@ import useSWR from 'swr'
 import { BarChart3, TrendingUp, AlertTriangle, HardDrive } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { cn } from '@/lib/utils'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -12,7 +13,8 @@ function GB(mb: number) {
 }
 
 export default function CapacityPage() {
-  const { data: capacity } = useSWR('/api/capacity', fetcher, { refreshInterval: 120000 })
+  const refreshInterval = useAppRefreshInterval(120)
+  const { data: capacity } = useSWR('/api/capacity', fetcher, { refreshInterval })
   const list = Array.isArray(capacity) ? capacity : []
 
   return (

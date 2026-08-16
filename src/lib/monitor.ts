@@ -15,10 +15,11 @@ import {
   type PerformanceSnapshot, type CapacityEntry, type ReplicationStatus, type SlowQuery,
 } from './db-store'
 import { loadRules, saveRule, addRun, loadProposals, saveProposal, newProposalId, type AutonomousProposal } from './automation-store'
-import { loadIncidents, addIncident } from './incident-store'
-import { sendSlack, sendEmail } from './notifier'
+import { loadIncidents, addIncident, patchIncident, loadEscalations, currentOnCallEmails } from './incident-store'
+import { sendSlack, sendTeams, sendWebhook, sendEmail } from './notifier'
 import { getSettings } from './settings-store'
 import { matchRouting } from './incident-store'
+import { appendAudit } from './audit-store'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 
@@ -26,6 +27,14 @@ function loadJson<T>(file: string, def: T): T {
   const p = path.join(DATA_DIR, file)
   if (!fs.existsSync(p)) return def
   try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return def }
+}
+
+function saveJson(file: string, data: unknown) {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
+  const target = path.join(DATA_DIR, file)
+  const temp = `${target}.${process.pid}.tmp`
+  fs.writeFileSync(temp, JSON.stringify(data, null, 2), 'utf8')
+  fs.renameSync(temp, target)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -89,8 +98,16 @@ function metricValue(
 
 async function dispatch(message: string, subject: string): Promise<void> {
   const settings = getSettings()
-  await sendSlack(message).catch(() => {})
   const routing = matchRouting('high', 'performance')
+  if (routing.notifySlack) await sendSlack(message).catch(() => {})
+  if (routing.notifyTeams) await sendTeams(message).catch(() => {})
+  if (routing.notifyWebhook) await sendWebhook({
+    alert_type: 'monitor',
+    title: subject,
+    team: settings.notificationTeam || undefined,
+    timestamp: new Date().toISOString(),
+    message,
+  }).catch(() => {})
   const emails: string[] = [...routing.notifyEmails]
   if (settings.alertRecipients) emails.push(...settings.alertRecipients.split(',').map(e => e.trim()).filter(Boolean))
   if (emails.length > 0) await sendEmail([...new Set(emails)], subject, message).catch(() => {})
@@ -108,6 +125,7 @@ export interface MonitorResult {
 
 export async function runMonitor(): Promise<MonitorResult> {
   const t0 = Date.now()
+  const settings = getSettings()
   const dbs = loadDatabases()
   const snapshots = latestSnapshots()
   const capacity = loadCapacity()
@@ -221,7 +239,7 @@ export async function runMonitor(): Promise<MonitorResult> {
 
     const connPct = Math.round(100 * snap.activeConnections / snap.maxConnections)
 
-    if (connPct >= 80 && !pendingExists(dbId, 'kill_query')) {
+    if (connPct >= settings.connectionPoolPctAlert && !pendingExists(dbId, 'kill_query')) {
       const estimatedIdle = Math.round(snap.activeConnections * 0.25)
       const sql = db.engine === 'postgresql'
         ? `SELECT pg_terminate_backend(pid)\nFROM pg_stat_activity\nWHERE state = 'idle'\n  AND state_change < NOW() - INTERVAL '30 minutes';`
@@ -229,14 +247,14 @@ export async function runMonitor(): Promise<MonitorResult> {
 
       addProposal({
         id: newProposalId(), source: 'performance',
-        severity: connPct >= 90 ? 'critical' : 'high',
+        severity: connPct >= Math.min(100, settings.connectionPoolPctAlert + 10) ? 'critical' : 'high',
         title: `Connection pool at ${connPct}% on ${db.name} — kill idle connections`,
         description: `${snap.activeConnections}/${snap.maxConnections} connections in use. ~${estimatedIdle} estimated idle >30 min. New connections will queue.`,
         dbId, dbName: db.name, engine: db.engine,
         actionType: 'kill_query', risk: 'low',
-        proposedAction: `Kill idle connections (>${connPct >= 90 ? '10' : '30'} min)`,
+        proposedAction: `Kill idle connections (>${connPct >= Math.min(100, settings.connectionPoolPctAlert + 10) ? '10' : '30'} min)`,
         sql, confidence: 93, estimatedGain: `Free ~${estimatedIdle} connection slots`,
-        status: 'pending', autoExecuteEnabled: connPct >= 90 && connPct < 95,
+        status: 'pending', autoExecuteEnabled: connPct >= Math.min(100, settings.connectionPoolPctAlert + 10) && connPct < 95,
         createdAt: new Date().toISOString(),
       })
     }
@@ -265,10 +283,10 @@ export async function runMonitor(): Promise<MonitorResult> {
     const db = dbs.find(d => d.id === repl.dbId)
     if (!db) continue
 
-    if (repl.lagSeconds > 10 && !pendingExists(repl.dbId, 'custom')) {
+    if (repl.lagSeconds > settings.replicationLagAlertSec && !pendingExists(repl.dbId, 'custom')) {
       addProposal({
         id: newProposalId(), source: 'performance',
-        severity: repl.lagSeconds > 30 ? 'critical' : 'high',
+        severity: repl.lagSeconds >= settings.replicationLagAlertSec * 2 ? 'critical' : 'high',
         title: `Replication lag ${repl.lagSeconds.toFixed(1)}s on ${repl.dbName}`,
         description: `Streaming replication lag is ${repl.lagSeconds.toFixed(1)}s. Replica is falling behind — data divergence risk on failover.`,
         dbId: repl.dbId, dbName: repl.dbName, engine: repl.engine,
@@ -292,15 +310,15 @@ export async function runMonitor(): Promise<MonitorResult> {
   for (const [dbId, queries] of slowByDb.entries()) {
     const db = dbs.find(d => d.id === dbId)
     if (!db) continue
-    const unanalyzed = queries.filter(q => !q.analyzed && q.durationMs > 500)
+    const unanalyzed = queries.filter(q => !q.analyzed && q.durationMs >= settings.slowQueryThresholdMs)
 
     if (unanalyzed.length >= 3 && !pendingExists(dbId, 'analyze')) {
       const worst = [...unanalyzed].sort((a, b) => b.durationMs - a.durationMs)[0]
       addProposal({
         id: newProposalId(), source: 'slow_query',
         severity: unanalyzed.length >= 5 ? 'high' : 'medium',
-        title: `${unanalyzed.length} slow queries >500ms on ${db.name} — run ANALYZE`,
-        description: `${unanalyzed.length} queries exceed 500ms avg. Worst: ${worst.durationMs}ms. Stale statistics may cause poor plan choices.`,
+        title: `${unanalyzed.length} slow queries >=${settings.slowQueryThresholdMs}ms on ${db.name} — run ANALYZE`,
+        description: `${unanalyzed.length} queries exceed ${settings.slowQueryThresholdMs}ms avg. Worst: ${worst.durationMs}ms. Stale statistics may cause poor plan choices.`,
         dbId, dbName: db.name, engine: db.engine,
         actionType: 'analyze', risk: 'low',
         proposedAction: 'ANALYZE; (refresh statistics for all tables)',
@@ -360,9 +378,9 @@ export async function runMonitor(): Promise<MonitorResult> {
     }
   }
 
-  // Critical replication lag (>60s)
+  // Critical replication lag uses the configured alert threshold.
   for (const repl of replication) {
-    if (repl.role !== 'replica' || repl.lagSeconds <= 60) continue
+    if (repl.role !== 'replica' || repl.lagSeconds < settings.replicationLagAlertSec * 2) continue
     if (!incidentOpen(`Replication lag critical: ${repl.dbName}`)) {
       addIncident({
         dbId: repl.dbId, dbName: repl.dbName, source: 'auto',
@@ -378,17 +396,18 @@ export async function runMonitor(): Promise<MonitorResult> {
     }
   }
 
-  // Connection pool critical (≥95%)
+  // Connection pool critical uses the configured threshold plus a 10-point escalation band.
   for (const [dbId, snap] of snapshots.entries()) {
     const db = dbs.find(d => d.id === dbId)
     if (!db || snap.maxConnections === 0) continue
     const connPct = Math.round(100 * snap.activeConnections / snap.maxConnections)
-    if (connPct >= 95 && !incidentOpen(`Connection pool critical: ${db.name}`)) {
+    const criticalPoolPct = Math.min(100, settings.connectionPoolPctAlert + 10)
+    if (connPct >= criticalPoolPct && !incidentOpen(`Connection pool critical: ${db.name}`)) {
       addIncident({
         dbId, dbName: db.name, source: 'auto',
         title: `Connection pool critical: ${db.name} (${connPct}%)`,
         severity: 'critical', category: 'performance', status: 'open',
-        notes: `Auto-raised. Pool: ${snap.activeConnections}/${snap.maxConnections} (${connPct}%). New connections will be rejected.`,
+        notes: `Auto-raised. Pool: ${snap.activeConnections}/${snap.maxConnections} (${connPct}%). Configured alert: ${settings.connectionPoolPctAlert}%.`,
       })
       incidentsRaised++
     }
@@ -411,6 +430,59 @@ export async function runMonitor(): Promise<MonitorResult> {
       incidentsRaised++
     }
   }
+
+  // Backup RPO breach
+  const backups = loadJson<Array<{ dbId: string; status: string; completedAt?: string; startedAt?: string; scheduledAt: string }>>('backups.json', [])
+  for (const db of dbs) {
+    const latest = backups
+      .filter(b => b.dbId === db.id && b.status === 'succeeded')
+      .sort((a, b) => (b.completedAt ?? b.startedAt ?? b.scheduledAt).localeCompare(a.completedAt ?? a.startedAt ?? a.scheduledAt))[0]
+    const latestAt = latest?.completedAt ?? latest?.startedAt ?? latest?.scheduledAt
+    const ageHours = latestAt ? (Date.now() - new Date(latestAt).getTime()) / 3_600_000 : Number.POSITIVE_INFINITY
+    if (ageHours > settings.backupRpoBreachAlertHrs && !incidentOpen(`Backup RPO breach: ${db.name}`)) {
+      addIncident({
+        dbId: db.id, dbName: db.name, source: 'auto',
+        title: `Backup RPO breach: ${db.name}`,
+        severity: 'high', category: 'backup', status: 'open',
+        notes: `No successful backup within ${settings.backupRpoBreachAlertHrs} hours. Last successful backup: ${latestAt ?? 'never'}.`,
+      })
+      incidentsRaised++
+    }
+  }
+
+  // Persist SLA breach state and deliver delayed escalation steps once per incident/step.
+  const sla = loadJson<Record<string, { ackMinutes: number; resolveMinutes: number }>>('sla.json', {})
+  const escalationState = loadJson<Record<string, string>>('escalation-state.json', {})
+  const escalationPolicies = loadEscalations()
+  for (const incident of loadIncidents().filter(item => item.status !== 'resolved')) {
+    const target = sla[incident.severity] ?? { ackMinutes: 30, resolveMinutes: 240 }
+    const ageMinutes = (Date.now() - new Date(incident.createdAt).getTime()) / 60_000
+    const ackBreached = !incident.acknowledgedAt && ageMinutes > target.ackMinutes
+    const resolveBreached = incident.status !== 'resolved' && ageMinutes > target.resolveMinutes
+    if (ackBreached || resolveBreached) patchIncident(incident.id, { slaBreach: true })
+
+    const route = matchRouting(incident.severity, incident.category)
+    const policy = escalationPolicies.find(item => item.id === (route?.escalationPolicyId ?? 'default'))
+    if (!policy) continue
+    for (let stepIndex = 0; stepIndex < policy.steps.length; stepIndex++) {
+      const step = policy.steps[stepIndex]
+      if (step.delayMin <= 0 || ageMinutes < step.delayMin || (incident.acknowledgedAt && step.delayMin <= target.ackMinutes)) continue
+      const stateKey = `${incident.id}:${policy.id}:${stepIndex}`
+      if (escalationState[stateKey]) continue
+      const message = step.message ?? `Escalation: ${incident.title} remains ${incident.status}`
+      if (step.notifySlack) await sendSlack(`[VynDB ESCALATION] ${message}\nIncident: ${incident.title}\nDatabase: ${incident.dbName}`).catch(() => {})
+      if (step.notifyTeams) await sendTeams(`[VynDB ESCALATION] ${message}\nIncident: ${incident.title}\nDatabase: ${incident.dbName}`).catch(() => {})
+      if (step.notifyWebhook) await sendWebhook({ alert_type: 'escalation', incidentId: incident.id, title: incident.title, database: incident.dbName, message, step: stepIndex }).catch(() => {})
+      if (step.notifyOncall) {
+        const emails = currentOnCallEmails()
+        if (emails.length) await sendEmail(emails, `[VynDB ESCALATION] ${incident.title}`, message).catch(() => {})
+      }
+      if (step.notifyEmails.length) await sendEmail(step.notifyEmails, `[VynDB ESCALATION] ${incident.title}`, message).catch(() => {})
+      escalationState[stateKey] = new Date().toISOString()
+      appendAudit({ actor: 'monitor', action: 'incident.escalate', resource: 'incident', resourceId: incident.id, success: true, details: { policy: policy.id, step: stepIndex } })
+    }
+  }
+  saveJson('escalation-state.json', escalationState)
 
   return {
     durationMs: Date.now() - t0,

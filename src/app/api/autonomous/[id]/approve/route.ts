@@ -3,6 +3,7 @@ import { requireRole, getSessionFromRequest } from '@/lib/auth'
 import { loadProposals, saveProposal } from '@/lib/automation-store'
 import { loadDatabases } from '@/lib/db-store'
 import { getPgPool, getMysqlPool, getMongoClient } from '@/lib/db-connections'
+import { appendAudit } from '@/lib/audit-store'
 
 const TIMEOUT_MS = 60_000
 
@@ -81,6 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (auth instanceof NextResponse) return auth
   const { id } = await params
   const session = await getSessionFromRequest(req)
+  const body = await req.json().catch(() => ({})) as { dryRun?: boolean; confirm?: boolean }
 
   const list = loadProposals()
   const idx = list.findIndex(p => p.id === id)
@@ -89,6 +91,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const proposal = list[idx]
   if (proposal.status !== 'pending') {
     return NextResponse.json({ error: `Proposal is already ${proposal.status}` }, { status: 400 })
+  }
+
+  if (!body.dryRun && body.confirm !== true) {
+    return NextResponse.json({ error: 'Explicit confirmation is required to execute a proposal' }, { status: 400 })
+  }
+
+  if (body.dryRun) {
+    appendAudit({
+      actor: session?.email ?? 'admin', action: 'autonomous.dry_run', resource: 'proposal', resourceId: proposal.id,
+      success: true, details: { dbId: proposal.dbId, actionType: proposal.actionType, sql: proposal.sql ?? null },
+    })
+    return NextResponse.json({ ok: true, dryRun: true, proposal })
   }
 
   const output = await executeProposal(
@@ -106,6 +120,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     executionOutput: output,
   }
   saveProposal(updated)
+  appendAudit({
+    actor: session?.email ?? 'admin', action: 'autonomous.execute', resource: 'proposal', resourceId: proposal.id,
+    success: !output.startsWith('[Error]'), details: { dbId: proposal.dbId, actionType: proposal.actionType, output: output.substring(0, 2000) },
+  })
 
   return NextResponse.json({ ok: true, output, executedAt })
 }

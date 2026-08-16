@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-const ENGINES = ['postgresql', 'mysql', 'oracle', 'sqlserver', 'mongodb', 'redis', 'couchbase']
+const ENGINES = ['postgresql', 'mysql', 'sqlserver', 'mongodb', 'redis', 'couchbase']
 
 const SAMPLE_QUERIES: Record<string, string> = {
   postgresql: `SELECT u.id, u.email, COUNT(o.id) AS order_count, SUM(o.total) AS lifetime_value

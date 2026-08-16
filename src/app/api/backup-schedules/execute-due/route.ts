@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Run backup
-    const result = await runBackup(db, sched.backupType, sched.location || undefined)
+    const globalPath = getSettings().backupPath || undefined
+    const result = await runBackup(db, sched.backupType, sched.location || globalPath)
 
     // Update schedule with run result
     const nextRun = computeNextRun(sched.cronExpr, now)

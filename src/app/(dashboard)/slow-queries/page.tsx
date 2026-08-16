@@ -4,6 +4,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { Zap, Brain, Clock, AlertTriangle, Database, Filter, Search, Sparkles, Loader2, X, Check } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -24,7 +25,8 @@ function DurationBadge({ ms }: { ms: number }) {
 }
 
 export default function SlowQueriesPage() {
-  const { data: queries, mutate } = useSWR('/api/slow-queries', fetcher, { refreshInterval: 60000 })
+  const refreshInterval = useAppRefreshInterval(60)
+  const { data: queries, mutate } = useSWR('/api/slow-queries', fetcher, { refreshInterval })
   const { data: dbs } = useSWR('/api/databases', fetcher)
 
   const list = Array.isArray(queries) ? queries : []

@@ -14,7 +14,10 @@ function load<T>(file: string, def: T): T {
 
 function save(file: string, data: unknown) {
   ensure()
-  fs.writeFileSync(path.join(DATA, file), JSON.stringify(data, null, 2), 'utf8')
+  const target = path.join(DATA, file)
+  const temp = `${target}.${process.pid}.tmp`
+  fs.writeFileSync(temp, JSON.stringify(data, null, 2), 'utf8')
+  fs.renameSync(temp, target)
 }
 
 // ─────────────────────────────────────────
@@ -35,33 +38,26 @@ export interface Incident {
   assignedTo?: string
   notes?: string
   slaBreach?: boolean
+  fingerprint?: string
+}
+
+export function incidentFingerprint(data: Pick<Incident, 'dbId' | 'category' | 'title'>): string {
+  return `${data.dbId}:${data.category}:${data.title.toLowerCase().replace(/\s*\([^)]*\)/g, '').trim()}`
+}
+
+export function findOpenIncidentDuplicate(data: Pick<Incident, 'dbId' | 'category' | 'title' | 'source' | 'fingerprint'>): Incident | null {
+  if (data.source !== 'auto') return null
+  const fingerprint = data.fingerprint ?? incidentFingerprint(data)
+  return loadIncidents().find(item => item.status !== 'resolved' && (item.fingerprint === fingerprint || incidentFingerprint(item) === fingerprint)) ?? null
 }
 
 const now = Date.now()
 
 const DEMO_INCIDENTS: Incident[] = [
   {
-    id: 'inc-001', dbId: 'db-004', dbName: 'analytics-oracle', title: 'Tablespace USERS approaching capacity (82%)',
-    severity: 'high', category: 'capacity', status: 'open', source: 'auto',
-    createdAt: new Date(now - 7200_000).toISOString(),
-  },
-  {
-    id: 'inc-002', dbId: 'db-004', dbName: 'analytics-oracle', title: 'Multiple failed login attempts — possible brute-force',
-    severity: 'critical', category: 'security', status: 'acknowledged', source: 'auto',
-    createdAt: new Date(now - 3600_000).toISOString(),
-    acknowledgedAt: new Date(now - 2800_000).toISOString(),
-    assignedTo: 'admin@vyndb.local',
-    notes: 'IP block applied via firewall. Investigating source.',
-  },
-  {
     id: 'inc-003', dbId: 'db-002', dbName: 'prod-mysql', title: 'Replica lag exceeded 10 seconds',
     severity: 'medium', category: 'replication', status: 'open', source: 'auto',
     createdAt: new Date(now - 1800_000).toISOString(),
-  },
-  {
-    id: 'inc-004', dbId: 'db-004', dbName: 'analytics-oracle', title: 'Backup job failed — RMAN-03002',
-    severity: 'high', category: 'backup', status: 'open', source: 'auto',
-    createdAt: new Date(now - 28800_000).toISOString(),
   },
   {
     id: 'inc-005', dbId: 'db-001', dbName: 'prod-postgres', title: 'Slow query spike — p99 exceeded 5s',
@@ -87,7 +83,10 @@ export function saveIncidents(list: Incident[]): void { save('incidents.json', l
 
 export function addIncident(data: Omit<Incident, 'id' | 'createdAt'>): Incident {
   const list = loadIncidents()
-  const inc: Incident = { id: `inc-${crypto.randomUUID().slice(0, 8)}`, createdAt: new Date().toISOString(), ...data }
+  const fingerprint = data.fingerprint ?? incidentFingerprint(data)
+  const duplicate = data.source === 'auto' && list.find(item => item.status !== 'resolved' && (item.fingerprint === fingerprint || incidentFingerprint(item) === fingerprint))
+  if (duplicate) return duplicate
+  const inc: Incident = { id: `inc-${crypto.randomUUID().slice(0, 8)}`, createdAt: new Date().toISOString(), fingerprint, ...data }
   list.unshift(inc)
   saveIncidents(list)
   return inc
@@ -181,6 +180,8 @@ export interface RoutingRule {
   category: string
   notifyEmails: string[]
   notifySlack: boolean
+  notifyTeams: boolean
+  notifyWebhook: boolean
   notifyOncall: boolean
   escalationPolicyId: string
 }
@@ -192,6 +193,7 @@ const DEFAULT_ROUTING: RoutingRule[] = [
     severity: 'critical', category: '*',
     notifyEmails: ['admin@vyndb.local'],
     notifySlack: true, notifyOncall: true,
+    notifyTeams: false, notifyWebhook: false,
     escalationPolicyId: 'critical',
   },
   {
@@ -200,6 +202,7 @@ const DEFAULT_ROUTING: RoutingRule[] = [
     severity: 'high', category: '*',
     notifyEmails: ['admin@vyndb.local'],
     notifySlack: true, notifyOncall: false,
+    notifyTeams: false, notifyWebhook: false,
     escalationPolicyId: 'default',
   },
   {
@@ -208,6 +211,7 @@ const DEFAULT_ROUTING: RoutingRule[] = [
     severity: '*', category: 'security',
     notifyEmails: ['admin@vyndb.local'],
     notifySlack: true, notifyOncall: true,
+    notifyTeams: false, notifyWebhook: false,
     escalationPolicyId: 'critical',
   },
   {
@@ -216,6 +220,7 @@ const DEFAULT_ROUTING: RoutingRule[] = [
     severity: '*', category: 'replication',
     notifyEmails: [],
     notifySlack: true, notifyOncall: false,
+    notifyTeams: false, notifyWebhook: false,
     escalationPolicyId: 'default',
   },
   {
@@ -224,6 +229,7 @@ const DEFAULT_ROUTING: RoutingRule[] = [
     severity: 'medium', category: '*',
     notifyEmails: ['admin@vyndb.local'],
     notifySlack: false, notifyOncall: false,
+    notifyTeams: false, notifyWebhook: false,
     escalationPolicyId: 'default',
   },
   {
@@ -232,6 +238,7 @@ const DEFAULT_ROUTING: RoutingRule[] = [
     severity: 'low', category: '*',
     notifyEmails: [],
     notifySlack: false, notifyOncall: false,
+    notifyTeams: false, notifyWebhook: false,
     escalationPolicyId: 'default',
   },
 ]
@@ -273,6 +280,8 @@ export interface EscalationStep {
   delayMin: number
   notifyEmails: string[]
   notifySlack: boolean
+  notifyTeams?: boolean
+  notifyWebhook?: boolean
   notifyOncall: boolean
   message?: string
 }
@@ -288,18 +297,18 @@ const DEFAULT_ESCALATIONS: EscalationPolicy[] = [
     id: 'critical',
     name: 'Critical — immediate page + escalation',
     steps: [
-      { delayMin: 0,  notifyEmails: ['admin@vyndb.local'], notifySlack: true,  notifyOncall: true,  message: '🔴 CRITICAL alert — immediate response required' },
-      { delayMin: 10, notifyEmails: ['admin@vyndb.local'], notifySlack: true,  notifyOncall: true,  message: '⚠️ Still unacknowledged after 10 minutes' },
-      { delayMin: 30, notifyEmails: ['admin@vyndb.local'], notifySlack: true,  notifyOncall: false, message: '🚨 Unresolved for 30 minutes — management escalation' },
+      { delayMin: 0,  notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: '🔴 CRITICAL alert — immediate response required' },
+      { delayMin: 10, notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: '⚠️ Still unacknowledged after 10 minutes' },
+      { delayMin: 30, notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: false, message: '🚨 Unresolved for 30 minutes — management escalation' },
     ],
   },
   {
     id: 'default',
     name: 'Standard — ack reminder + escalation',
     steps: [
-      { delayMin: 15, notifyEmails: [], notifySlack: true,  notifyOncall: true,  message: 'Reminder: incident unacknowledged for 15 minutes' },
-      { delayMin: 60, notifyEmails: [], notifySlack: true,  notifyOncall: true,  message: 'Escalation: incident unresolved for 1 hour' },
-      { delayMin: 240, notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyOncall: false, message: 'Critical escalation: unresolved for 4 hours' },
+      { delayMin: 15, notifyEmails: [], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: 'Reminder: incident unacknowledged for 15 minutes' },
+      { delayMin: 60, notifyEmails: [], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: 'Escalation: incident unresolved for 1 hour' },
+      { delayMin: 240, notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: false, message: 'Critical escalation: unresolved for 4 hours' },
     ],
   },
 ]

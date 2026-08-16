@@ -4,13 +4,15 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { Timer, CheckCircle, XCircle, AlertTriangle, Save, Loader2 } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const
 
 export default function SlaPage() {
-  const { data: incidents } = useSWR('/api/incidents', fetcher, { refreshInterval: 30000 })
+  const refreshInterval = useAppRefreshInterval(30)
+  const { data: incidents } = useSWR('/api/incidents', fetcher, { refreshInterval })
   const { data: sla, mutate } = useSWR('/api/sla', fetcher)
   const [saving, setSaving] = useState(false)
   const [config, setConfig] = useState<Record<string, { ackMinutes: number; resolveMinutes: number }> | null>(null)
@@ -31,7 +33,7 @@ export default function SlaPage() {
       if (inc.acknowledgedAt) {
         const ackMin = (new Date(inc.acknowledgedAt).getTime() - new Date(inc.createdAt).getTime()) / 60000
         if (ackMin <= target.ackMinutes) { ackMet++ } else { ackBreaches++ }
-      } else if (ageMin > target.ackMinutes && inc.status !== 'resolved') {
+      } else if (ageMin > target.ackMinutes) {
         ackBreaches++
       }
       if (inc.resolvedAt) {

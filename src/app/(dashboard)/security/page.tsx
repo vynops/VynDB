@@ -4,6 +4,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { Shield, AlertTriangle, CheckCircle, Lock, Eye, UserX } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -24,7 +25,8 @@ const CAT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
 }
 
 export default function SecurityPage() {
-  const { data: findings } = useSWR('/api/security', fetcher, { refreshInterval: 60000 })
+  const refreshInterval = useAppRefreshInterval(60)
+  const { data: findings } = useSWR('/api/security', fetcher, { refreshInterval })
   const { data: dbs } = useSWR('/api/databases', fetcher)
   const list = Array.isArray(findings) ? findings : []
   const dbList = Array.isArray(dbs) ? dbs : []

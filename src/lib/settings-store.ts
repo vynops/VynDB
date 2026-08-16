@@ -5,6 +5,14 @@ export interface AppSettings {
   // Notifications — Slack
   slackWebhookUrl: string
   // Notifications — Email / SMTP
+  // Notifications — Microsoft Teams
+  teamsWebhookUrl: string
+  // Notifications — Custom Webhook
+  customWebhookUrl: string
+  // Notifications — Team / On-Call
+  notificationTeam: string
+  notifyCooldownMinutes: number
+  // Notifications — Email / SMTP
   alertEmailEnabled: boolean
   alertRecipients: string   // comma-separated
   smtpHost: string
@@ -12,8 +20,12 @@ export interface AppSettings {
   smtpUser: string
   smtpPassword: string
   smtpFrom: string
-  // AI Copilot (Groq)
+  // AI Copilot — Multi-provider support
+  aiProvider: 'groq' | 'openai' | 'google' | 'anthropic' | 'custom'
   aiModel: string
+  aiApiKey: string
+  aiBaseUrl: string  // for custom/self-hosted providers
+  // Legacy (for backward compatibility)
   groqApiKey: string
   // GraphQL endpoint (optional data source)
   graphqlEndpointUrl: string
@@ -33,15 +45,22 @@ export interface AppSettings {
 
 const DEFAULTS: AppSettings = {
   slackWebhookUrl: '',
-  alertEmailEnabled: false,
+    teamsWebhookUrl: '',
+    customWebhookUrl: '',
+    notificationTeam: '',
+    notifyCooldownMinutes: 30,
+    alertEmailEnabled: false,
   alertRecipients: '',
   smtpHost: '',
   smtpPort: 587,
   smtpUser: '',
   smtpPassword: '',
   smtpFrom: '',
+  aiProvider: 'groq',
   aiModel: 'llama-3.3-70b-versatile',
-  groqApiKey: process.env.GROQ_API_KEY ?? '',
+  aiApiKey: process.env.GROQ_API_KEY ?? '',
+  aiBaseUrl: '',
+  groqApiKey: process.env.GROQ_API_KEY ?? '',  // backward compatibility
   graphqlEndpointUrl: '',
   graphqlAuthToken: '',
   defaultRefreshInterval: 30,
@@ -76,6 +95,8 @@ export function saveSettings(partial: Partial<AppSettings>): AppSettings {
   const current = getSettings()
   const updated: AppSettings = { ...current, ...partial }
   ensureDir()
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(updated, null, 2), 'utf8')
+  const tempFile = `${SETTINGS_FILE}.${process.pid}.tmp`
+  fs.writeFileSync(tempFile, JSON.stringify(updated, null, 2), 'utf8')
+  fs.renameSync(tempFile, SETTINGS_FILE)
   return updated
 }

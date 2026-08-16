@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth'
-import { loadDatabases, saveDatabase } from '@/lib/db-store'
+import { loadDatabases, saveDatabase, SUPPORTED_DB_ENGINES } from '@/lib/db-store'
 import crypto from 'crypto'
+import { appendAudit } from '@/lib/audit-store'
 
 export async function GET(req: NextRequest) {
   const auth = await requireRole(req, 'viewer')
@@ -13,6 +14,9 @@ export async function POST(req: NextRequest) {
   const auth = await requireRole(req, 'editor')
   if (auth instanceof NextResponse) return auth
   const body = await req.json()
+  if (typeof body.engine !== 'string' || !SUPPORTED_DB_ENGINES.includes(body.engine)) {
+    return NextResponse.json({ error: 'Unsupported database engine' }, { status: 400 })
+  }
   const db = {
     id: `db-${crypto.randomUUID().slice(0, 8)}`,
     name: body.name, engine: body.engine, host: body.host,
@@ -24,5 +28,6 @@ export async function POST(req: NextRequest) {
     version: undefined,
   }
   saveDatabase(db)
+  appendAudit({ actor: auth.email, action: 'database.create', resource: 'database', resourceId: db.id, success: true, details: { name: db.name, engine: db.engine, host: db.host } })
   return NextResponse.json(db, { status: 201 })
 }

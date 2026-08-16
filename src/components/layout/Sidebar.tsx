@@ -36,6 +36,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Observe',
     items: [
       { href: '/performance',  label: 'Performance',      icon: Activity },
+      { href: '/diagnostics',  label: 'Diagnostics',      icon: Activity },
       { href: '/slow-queries', label: 'Slow Queries',     icon: Zap },
       { href: '/replication',  label: 'Replication & HA', icon: GitBranch },
       { href: '/capacity',     label: 'Capacity',         icon: BarChart3 },

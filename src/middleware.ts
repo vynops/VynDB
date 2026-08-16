@@ -5,18 +5,29 @@ const PUBLIC_PATHS = ['/login', '/api/auth/login']
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
-  if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) return NextResponse.next()
+  const requestId = req.headers.get('x-request-id') ?? globalThis.crypto.randomUUID()
+  if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
+    const response = NextResponse.next()
+    response.headers.set('x-request-id', requestId)
+    return response
+  }
   if (pathname.startsWith('/api/')) {
     // API routes are protected per-route with requireRole
-    return NextResponse.next()
+    const response = NextResponse.next()
+    response.headers.set('x-request-id', requestId)
+    return response
   }
   const session = await getSessionFromRequest(req)
   if (!session) {
     const url = req.nextUrl.clone()
     url.pathname = '/login'
-    return NextResponse.redirect(url)
+    const response = NextResponse.redirect(url)
+    response.headers.set('x-request-id', requestId)
+    return response
   }
-  return NextResponse.next()
+  const response = NextResponse.next()
+  response.headers.set('x-request-id', requestId)
+  return response
 }
 
 export const config = {

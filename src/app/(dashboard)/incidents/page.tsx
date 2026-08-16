@@ -4,6 +4,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { AlertTriangle, CheckCircle, Clock, Plus, X, Search, UserPlus, FileText, Loader2 } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -38,7 +39,8 @@ interface Incident {
 }
 
 export default function IncidentsPage() {
-  const { data: incidents, mutate } = useSWR('/api/incidents', fetcher, { refreshInterval: 20000 })
+  const refreshInterval = useAppRefreshInterval(20)
+  const { data: incidents, mutate } = useSWR('/api/incidents', fetcher, { refreshInterval })
   const { data: dbs } = useSWR('/api/databases', fetcher)
   const { data: me } = useSWR('/api/auth/me', fetcher)
   const { data: oncall } = useSWR('/api/oncall', fetcher)

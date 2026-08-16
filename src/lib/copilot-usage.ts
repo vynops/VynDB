@@ -8,6 +8,7 @@ export interface UsageEntry {
   completionTokens: number
   totalTokens: number
   model: string
+  provider: string
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data')
@@ -23,17 +24,17 @@ function loadAll(): UsageEntry[] {
   try { return JSON.parse(fs.readFileSync(USAGE_FILE, 'utf8')) as UsageEntry[] } catch { return [] }
 }
 
-export function recordUsage(promptTokens: number, completionTokens: number, model: string): void {
+export function recordUsage(promptTokens: number, completionTokens: number, model: string, provider = 'unknown'): void {
   const all = loadAll()
   const date = new Date().toISOString().slice(0, 10)
-  const existing = all.find(e => e.date === date && e.model === model)
+  const existing = all.find(e => e.date === date && e.model === model && e.provider === provider)
   if (existing) {
     existing.requests += 1
     existing.promptTokens += promptTokens
     existing.completionTokens += completionTokens
     existing.totalTokens += promptTokens + completionTokens
   } else {
-    all.push({ date, requests: 1, promptTokens, completionTokens, totalTokens: promptTokens + completionTokens, model })
+    all.push({ date, requests: 1, promptTokens, completionTokens, totalTokens: promptTokens + completionTokens, model, provider })
   }
   ensureDir()
   fs.writeFileSync(USAGE_FILE, JSON.stringify(all, null, 2), 'utf8')

@@ -12,11 +12,11 @@ const CATEGORIES = ['*', 'performance', 'availability', 'replication', 'backup',
 
 interface RoutingRule {
   id: string; name: string; severity: string; category: string;
-  notifyEmails: string[]; notifySlack: boolean; notifyOncall: boolean; escalationPolicyId: string
+  notifyEmails: string[]; notifySlack: boolean; notifyTeams?: boolean; notifyWebhook?: boolean; notifyOncall: boolean; escalationPolicyId: string
 }
 
 interface EscalationStep {
-  delayMin: number; notifyEmails: string[]; notifySlack: boolean; notifyOncall: boolean; message?: string
+  delayMin: number; notifyEmails: string[]; notifySlack: boolean; notifyTeams?: boolean; notifyWebhook?: boolean; notifyOncall: boolean; message?: string
 }
 
 interface EscalationPolicy {
@@ -33,7 +33,7 @@ export default function RoutingPage() {
 
   const [showRuleModal, setShowRuleModal] = useState(false)
   const [editRuleId, setEditRuleId] = useState<string | null>(null)
-  const EMPTY_RULE = { name: '', severity: '*', category: '*', notifyEmails: '', notifySlack: true, notifyOncall: true, escalationPolicyId: 'default' }
+  const EMPTY_RULE = { name: '', severity: '*', category: '*', notifyEmails: '', notifySlack: true, notifyTeams: false, notifyWebhook: false, notifyOncall: true, escalationPolicyId: 'default' }
   const [ruleForm, setRuleForm] = useState(EMPTY_RULE)
   const [saving, setSaving] = useState(false)
   const [expandedPolicy, setExpandedPolicy] = useState<string | null>(null)
@@ -62,7 +62,7 @@ export default function RoutingPage() {
 
   const openEdit = (rule: RoutingRule) => {
     setEditRuleId(rule.id)
-    setRuleForm({ name: rule.name, severity: rule.severity, category: rule.category, notifyEmails: rule.notifyEmails.join(', '), notifySlack: rule.notifySlack, notifyOncall: rule.notifyOncall, escalationPolicyId: rule.escalationPolicyId })
+    setRuleForm({ name: rule.name, severity: rule.severity, category: rule.category, notifyEmails: rule.notifyEmails.join(', '), notifySlack: rule.notifySlack, notifyTeams: rule.notifyTeams ?? false, notifyWebhook: rule.notifyWebhook ?? false, notifyOncall: rule.notifyOncall, escalationPolicyId: rule.escalationPolicyId })
     setShowRuleModal(true)
   }
 
@@ -79,7 +79,7 @@ export default function RoutingPage() {
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <div>
             <h2 className="text-sm font-bold text-white">Alert Routing Rules</h2>
-            <p className="text-xs text-slate-500">Rules are evaluated top-to-bottom — first match wins</p>
+            <p className="text-xs text-slate-500">Specific severity and category matches take precedence over wildcard rules</p>
           </div>
           <button onClick={() => setShowRuleModal(true)}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-xs transition-colors">
@@ -98,6 +98,8 @@ export default function RoutingPage() {
                 </div>
                 <div className="flex flex-wrap gap-2 text-[10px] text-slate-400">
                   {rule.notifySlack && <span className="bg-slate-800 px-1.5 py-0.5 rounded">Slack</span>}
+                  {rule.notifyTeams && <span className="bg-slate-800 px-1.5 py-0.5 rounded">Teams</span>}
+                  {rule.notifyWebhook && <span className="bg-slate-800 px-1.5 py-0.5 rounded">Webhook</span>}
                   {rule.notifyOncall && <span className="bg-slate-800 px-1.5 py-0.5 rounded">On-call</span>}
                   {rule.notifyEmails.map(e => <span key={e} className="bg-slate-800 px-1.5 py-0.5 rounded">{e}</span>)}
                   {rule.escalationPolicyId && <span className="text-violet-400">→ {rule.escalationPolicyId}</span>}
@@ -144,6 +146,7 @@ export default function RoutingPage() {
                         {step.message && <div className="text-slate-400 mt-0.5">"{step.message}"</div>}
                         <div className="flex gap-2 mt-1 flex-wrap">
                           {step.notifySlack && <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">Slack</span>}
+                          {step.notifyTeams && <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">Teams</span>}
                           {step.notifyOncall && <span className="bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded">On-call</span>}
                           {step.notifyEmails.map(e => <span key={e} className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">{e}</span>)}
                         </div>
@@ -228,6 +231,14 @@ export default function RoutingPage() {
                 <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
                   <input type="checkbox" checked={ruleForm.notifySlack} onChange={e => setRuleForm(f => ({ ...f, notifySlack: e.target.checked }))} className="w-4 h-4 rounded" />
                   Slack
+                </label>
+                <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                  <input type="checkbox" checked={ruleForm.notifyTeams} onChange={e => setRuleForm(f => ({ ...f, notifyTeams: e.target.checked }))} className="w-4 h-4 rounded" />
+                  Teams
+                </label>
+                <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                  <input type="checkbox" checked={ruleForm.notifyWebhook} onChange={e => setRuleForm(f => ({ ...f, notifyWebhook: e.target.checked }))} className="w-4 h-4 rounded" />
+                  Webhook
                 </label>
                 <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
                   <input type="checkbox" checked={ruleForm.notifyOncall} onChange={e => setRuleForm(f => ({ ...f, notifyOncall: e.target.checked }))} className="w-4 h-4 rounded" />

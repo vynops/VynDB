@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { loadDatabases, saveDatabase, deleteDatabase } from '@/lib/db-store'
+import { appendAudit } from '@/lib/audit-store'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole(req, 'viewer')
@@ -33,6 +34,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     notes: body.notes ?? list[idx].notes,
   }
   saveDatabase(updated)
+  appendAudit({ actor: auth.email, action: 'database.update', resource: 'database', resourceId: id, success: true, details: { fields: Object.keys(body).filter(key => !/password|token/i.test(key)) } })
   return NextResponse.json(updated)
 }
 
@@ -41,5 +43,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (auth instanceof NextResponse) return auth
   const { id } = await params
   deleteDatabase(id)
+  appendAudit({ actor: auth.email, action: 'database.delete', resource: 'database', resourceId: id, success: true })
   return NextResponse.json({ ok: true })
 }

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { Phone, Plus, Trash2, Clock, X, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAppTimezone, formatAppDate } from '@/lib/use-app-timezone'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -15,6 +16,7 @@ interface Shift {
 const TZONES = ['UTC', 'America/New_York', 'America/Los_Angeles', 'America/Chicago', 'Europe/London', 'Europe/Berlin', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney']
 
 export default function OnCallPage() {
+  const appTimezone = useAppTimezone()
   const { data: shifts, mutate } = useSWR('/api/oncall', fetcher)
   const list: Shift[] = Array.isArray(shifts) ? shifts : []
 
@@ -61,10 +63,10 @@ export default function OnCallPage() {
         </div>
         <div className="text-[10px] text-slate-400 mt-0.5">{shift.userEmail}</div>
         <div className="text-[10px] text-slate-500 mt-1 flex flex-wrap gap-2">
-          <span className="flex items-center gap-1"><Clock size={9} />{new Date(shift.startTime).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+          <span className="flex items-center gap-1"><Clock size={9} />{formatAppDate(shift.startTime, appTimezone, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
           <span>→</span>
-          <span>{new Date(shift.endTime).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-          <span className="text-slate-600">({shift.timezone})</span>
+          <span>{formatAppDate(shift.endTime, appTimezone, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+          <span className="text-slate-600">({appTimezone})</span>
         </div>
         {shift.name && <div className="text-[10px] text-emerald-400/70 mt-0.5">{shift.name}</div>}
       </div>

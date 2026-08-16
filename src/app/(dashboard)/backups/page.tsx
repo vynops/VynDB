@@ -51,6 +51,7 @@ interface BackupJob {
   id: string; dbId: string; dbName: string; type: string; status: BackupStatus
   sizeMB: number; rpoHrs: number; rtoMins: number; location: string; error?: string
   scheduledAt: string; startedAt?: string; completedAt?: string
+  lastVerifiedAt?: string; lastVerificationStatus?: 'verified' | 'invalid' | 'not_verified'; lastVerificationMessage?: string
 }
 interface DiskStats { fileCount: number; totalMB: number; oldestDate: string | null; path: string }
 interface RunResult { ok: boolean; succeeded: number; failed: number; total: number }
@@ -96,6 +97,7 @@ export default function BackupsPage() {
   const [retentionDays,setRetention]   = useState(7)
   const [statusFilter, setStatusFilter]= useState<string>('all')
   const [selectedBackup, setSelectedBackup] = useState<BackupJob | null>(null)
+  const [verifyingId, setVerifyingId] = useState<string | null>(null)
 
   // Schedule state
   const [showSchedModal, setShowSchedModal] = useState(false)
@@ -132,6 +134,16 @@ export default function BackupsPage() {
     setDeletingId(id)
     try { await fetch(`/api/backups/${id}`, { method: 'DELETE' }); mutate(); mutateDisk() }
     finally { setDeletingId(null) }
+  }
+
+  const handleVerify = async (backup: BackupJob) => {
+    setVerifyingId(backup.id)
+    try {
+      const response = await fetch(`/api/backups/${backup.id}/verify`, { method: 'POST' })
+      const result = await response.json()
+      setSelectedBackup({ ...backup, lastVerifiedAt: new Date().toISOString(), lastVerificationStatus: result.status, lastVerificationMessage: result.message })
+      mutate()
+    } finally { setVerifyingId(null) }
   }
 
   const handleCleanup = async () => {
@@ -686,6 +698,14 @@ export default function BackupsPage() {
                   <div className="text-slate-500 mb-1">File Location</div>
                   <div className="font-mono text-slate-300 break-all">{b.location || '—'}</div>
                 </div>
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                  <div className="text-slate-500 mb-1">Recovery verification</div>
+                  <div className={cn('font-semibold', b.lastVerificationStatus === 'verified' ? 'text-emerald-400' : b.lastVerificationStatus === 'invalid' ? 'text-red-400' : 'text-yellow-400')}>
+                    {b.lastVerificationStatus ?? 'Not verified'}
+                  </div>
+                  {b.lastVerifiedAt && <div className="text-[10px] text-slate-500 mt-1">{new Date(b.lastVerifiedAt).toLocaleString()}</div>}
+                  {b.lastVerificationMessage && <div className="text-[10px] text-slate-400 mt-1">{b.lastVerificationMessage}</div>}
+                </div>
                 <div className="space-y-1.5">
                   {b.scheduledAt && <div className="flex justify-between"><span className="text-slate-500">Scheduled</span><span className="text-slate-300">{new Date(b.scheduledAt).toLocaleString()}</span></div>}
                   {b.startedAt   && <div className="flex justify-between"><span className="text-slate-500">Started</span><span className="text-slate-300">{new Date(b.startedAt).toLocaleString()}</span></div>}
@@ -697,6 +717,11 @@ export default function BackupsPage() {
                     <div className="text-red-300/80 font-mono break-all">{b.error}</div>
                   </div>
                 )}
+                <button onClick={() => handleVerify(b)} disabled={verifyingId === b.id}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-xs font-semibold disabled:opacity-50">
+                  {verifyingId === b.id ? <Loader2 size={13} className="animate-spin" /> : <Shield size={13} />}
+                  {verifyingId === b.id ? 'Verifying artifact…' : 'Verify recovery artifact'}
+                </button>
               </div>
             </div>
           </div>

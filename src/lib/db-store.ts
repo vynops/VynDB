@@ -2,9 +2,13 @@ import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 
-export type DbEngine = 'postgresql' | 'mysql' | 'oracle' | 'sqlserver' | 'mongodb' | 'redis' | 'couchbase'
+export type DbEngine = 'postgresql' | 'mysql' | 'sqlserver' | 'mongodb' | 'redis' | 'couchbase'
 export type DbEnv = 'production' | 'staging' | 'development' | 'test'
 export type DbStatus = 'connected' | 'warning' | 'error' | 'unknown'
+
+export const SUPPORTED_DB_ENGINES: readonly DbEngine[] = [
+  'postgresql', 'mysql', 'sqlserver', 'mongodb', 'redis', 'couchbase',
+]
 
 export interface DbConnection {
   id: string
@@ -89,6 +93,9 @@ export interface BackupJob {
   rtoMins: number   // estimated RTO
   location: string
   error?: string
+  lastVerifiedAt?: string
+  lastVerificationStatus?: 'verified' | 'invalid' | 'not_verified'
+  lastVerificationMessage?: string
 }
 
 export interface ReplicationStatus {
@@ -119,7 +126,10 @@ function load<T>(file: string, defaultVal: T): T {
 
 function save(file: string, data: unknown) {
   ensureDir()
-  fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2), 'utf8')
+  const target = path.join(DATA_DIR, file)
+  const tempFile = `${target}.${process.pid}.tmp`
+  fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf8')
+  fs.renameSync(tempFile, target)
 }
 
 // ────────── DB Connections ──────────
@@ -144,13 +154,6 @@ const DEMO_DBS: DbConnection[] = [
     environment: 'staging', status: 'connected', healthScore: 97,
     lastChecked: new Date(Date.now() - 60_000).toISOString(), version: 'PostgreSQL 15.6',
     createdAt: new Date(Date.now() - 20 * 86400_000).toISOString(),
-  },
-  {
-    id: 'db-004', name: 'analytics-oracle', engine: 'oracle', host: 'oracle.corp.internal',
-    port: 1521, database: 'ORCL', username: 'analytics', passwordEnc: '', ssl: true,
-    environment: 'production', status: 'warning', healthScore: 71,
-    lastChecked: new Date(Date.now() - 120_000).toISOString(), version: 'Oracle 19c (19.3)',
-    notes: 'Tablespace USERS at 82% — schedule cleanup', createdAt: new Date(Date.now() - 60 * 86400_000).toISOString(),
   },
   {
     id: 'db-005', name: 'cache-redis', engine: 'redis', host: 'redis.prod.internal',
@@ -182,7 +185,10 @@ export function loadDatabases(): DbConnection[] {
     fs.writeFileSync(file, JSON.stringify(DEMO_DBS, null, 2), 'utf8')
     return DEMO_DBS
   }
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')) as DbConnection[] } catch { return DEMO_DBS }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as DbConnection[]
+    return parsed.filter(db => SUPPORTED_DB_ENGINES.includes(db.engine))
+  } catch { return DEMO_DBS }
 }
 
 export function saveDatabase(db: DbConnection): void {
@@ -229,12 +235,6 @@ const DEMO_QUERIES: SlowQuery[] = [
     id: 'q-003', dbId: 'db-001', dbName: 'prod-postgres', engine: 'postgresql',
     query: 'UPDATE sessions SET last_active = NOW() WHERE token = $1',
     durationMs: 2150, executedAt: new Date(Date.now() - 1_800_000).toISOString(), analyzed: false,
-  },
-  {
-    id: 'q-004', dbId: 'db-004', dbName: 'analytics-oracle', engine: 'oracle',
-    query: 'SELECT /*+ FULL(t) */ t.region, SUM(t.amount) FROM transactions t WHERE t.created_date BETWEEN :1 AND :2 GROUP BY t.region',
-    durationMs: 12800, rowsExamined: 45000000, rowsReturned: 24,
-    executedAt: new Date(Date.now() - 3_600_000).toISOString(), analyzed: false,
   },
   {
     id: 'q-005', dbId: 'db-006', dbName: 'app-mongodb', engine: 'mongodb',
@@ -382,12 +382,6 @@ const DEMO_BACKUPS: BackupJob[] = [
     sizeMB: 12400, rpoHrs: 24, rtoMins: 90, location: '/mnt/nas/mysql/full/',
   },
   {
-    id: 'bk-004', dbId: 'db-004', dbName: 'analytics-oracle', type: 'incremental',
-    status: 'failed', scheduledAt: new Date(now - 28800_000).toISOString(),
-    startedAt: new Date(now - 28600_000).toISOString(), sizeMB: 0, rpoHrs: 8, rtoMins: 120,
-    location: '/backup/oracle/', error: 'RMAN-03002: failure of backup command at 07/07/2026 02:14:55',
-  },
-  {
     id: 'bk-005', dbId: 'db-006', dbName: 'app-mongodb', type: 'logical',
     status: 'succeeded', scheduledAt: new Date(now - 7200_000).toISOString(),
     startedAt: new Date(now - 7100_000).toISOString(), completedAt: new Date(now - 6200_000).toISOString(),
@@ -477,15 +471,6 @@ const DEMO_CAPACITY: CapacityEntry[] = [
       { name: 'products', sizeMB: 2100, growthMBPerDay: 40 },
     ],
   },
-  {
-    dbId: 'db-004', dbName: 'analytics-oracle', totalSizeMB: 204800, dataSizeMB: 168000,
-    indexSizeMB: 28000, freeSizeMB: 8800, growthMBPerDay: 1200, daysUntilFull: 28,
-    indexBloatPct: 22, tableBloatPct: 15,
-    topTables: [
-      { name: 'transactions', sizeMB: 45000, growthMBPerDay: 650 },
-      { name: 'audit_log', sizeMB: 28000, growthMBPerDay: 420 },
-    ],
-  },
 ]
 
 export function loadCapacity(): CapacityEntry[] {
@@ -513,13 +498,6 @@ const DEMO_SECURITY: SecurityFinding[] = [
     description: 'The user "appuser" has SUPERUSER privileges but is used for application connections.',
     recommendation: 'Create a least-privilege role with only SELECT, INSERT, UPDATE, DELETE on required tables.',
     detectedAt: new Date(Date.now() - 3600_000).toISOString(), status: 'open',
-  },
-  {
-    id: 'sec-002', dbId: 'db-004', dbName: 'analytics-oracle', severity: 'critical',
-    category: 'auth', title: 'Multiple failed login attempts — brute-force indicator',
-    description: '482 failed login attempts for user SYS in the last 24 hours from 3 distinct IPs.',
-    recommendation: 'Block source IPs, enable Oracle account lockout after 5 failures (FAILED_LOGIN_ATTEMPTS=5).',
-    detectedAt: new Date(Date.now() - 1800_000).toISOString(), status: 'open',
   },
   {
     id: 'sec-003', dbId: 'db-003', dbName: 'staging-postgres', severity: 'medium',

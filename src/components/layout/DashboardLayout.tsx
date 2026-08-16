@@ -19,7 +19,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   '/oncall':       { title: 'On-Call',             subtitle: 'Shift schedule & current on-call' },
   '/routing':      { title: 'Routing & Escalations', subtitle: 'Alert routing rules & escalation policies' },
   '/sla':          { title: 'SLA Tracker',         subtitle: 'Response & resolution SLA tracking' },
-  '/copilot':      { title: 'AI Copilot',          subtitle: 'Database expert powered by Groq AI' },
+  '/copilot':      { title: 'AI Copilot',          subtitle: 'Database operations copilot grounded in VynDB evidence' },
   '/team':         { title: 'Team',                subtitle: 'User management & role-based access' },
   '/settings':     { title: 'Settings',            subtitle: 'Integrations, alerts & AI configuration' },
 }

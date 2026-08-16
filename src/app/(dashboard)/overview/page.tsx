@@ -4,13 +4,13 @@ import useSWR from 'swr'
 import Link from 'next/link'
 import { Activity, AlertTriangle, Database, Zap, Shield, HardDrive, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 const ENGINE_COLORS: Record<string, string> = {
   postgresql: 'text-indigo-400 bg-indigo-500/10',
   mysql:      'text-yellow-400 bg-yellow-500/10',
-  oracle:     'text-red-400 bg-red-500/10',
   sqlserver:  'text-blue-400 bg-blue-500/10',
   mongodb:    'text-green-400 bg-green-500/10',
   redis:      'text-orange-400 bg-orange-500/10',
@@ -62,10 +62,11 @@ function HealthBar({ score }: { score: number }) {
 }
 
 export default function OverviewPage() {
-  const { data: dbs } = useSWR('/api/databases', fetcher, { refreshInterval: 30000 })
-  const { data: incidents } = useSWR('/api/incidents', fetcher, { refreshInterval: 20000 })
-  const { data: slowQ } = useSWR('/api/slow-queries', fetcher, { refreshInterval: 60000 })
-  const { data: backups } = useSWR('/api/backups', fetcher, { refreshInterval: 60000 })
+  const refreshInterval = useAppRefreshInterval(30)
+  const { data: dbs } = useSWR('/api/databases', fetcher, { refreshInterval })
+  const { data: incidents } = useSWR('/api/incidents', fetcher, { refreshInterval })
+  const { data: slowQ } = useSWR('/api/slow-queries', fetcher, { refreshInterval })
+  const { data: backups } = useSWR('/api/backups', fetcher, { refreshInterval })
 
   const dbList = Array.isArray(dbs) ? dbs : []
   const incList = Array.isArray(incidents) ? incidents : []

@@ -4,16 +4,16 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { Plus, Edit2, Trash2, Wifi, WifiOff, ChevronDown, X, Loader2, CheckCircle, XCircle, Database, Terminal, Play, ChevronRight } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-type DbEngine = 'postgresql' | 'mysql' | 'oracle' | 'sqlserver' | 'mongodb' | 'redis' | 'couchbase'
+type DbEngine = 'postgresql' | 'mysql' | 'sqlserver' | 'mongodb' | 'redis' | 'couchbase'
 type DbEnv = 'production' | 'staging' | 'development' | 'test'
 
 const ENGINES: { value: DbEngine; label: string; defaultPort: number }[] = [
   { value: 'postgresql', label: 'PostgreSQL', defaultPort: 5432 },
   { value: 'mysql',      label: 'MySQL / MariaDB', defaultPort: 3306 },
-  { value: 'oracle',     label: 'Oracle', defaultPort: 1521 },
   { value: 'sqlserver',  label: 'SQL Server', defaultPort: 1433 },
   { value: 'mongodb',    label: 'MongoDB', defaultPort: 27017 },
   { value: 'redis',      label: 'Redis', defaultPort: 6379 },
@@ -23,7 +23,6 @@ const ENGINES: { value: DbEngine; label: string; defaultPort: number }[] = [
 const ENGINE_COLOR: Record<string, string> = {
   postgresql: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
   mysql:      'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
-  oracle:     'text-red-400 bg-red-500/10 border-red-500/20',
   sqlserver:  'text-blue-400 bg-blue-500/10 border-blue-500/20',
   mongodb:    'text-green-400 bg-green-500/10 border-green-500/20',
   redis:      'text-orange-400 bg-orange-500/10 border-orange-500/20',
@@ -75,10 +74,11 @@ function fmtMs(ms: number): string {
 }
 
 export default function DatabasesPage() {
+  const refreshInterval = useAppRefreshInterval(30)
   const { data: dbs, mutate } = useSWR('/api/databases', fetcher)
-  const { data: perfList } = useSWR('/api/performance', fetcher, { refreshInterval: 30000 })
-  const { data: capList } = useSWR('/api/capacity', fetcher, { refreshInterval: 60000 })
-  const { data: replList } = useSWR('/api/replication', fetcher, { refreshInterval: 30000 })
+  const { data: perfList } = useSWR('/api/performance', fetcher, { refreshInterval })
+  const { data: capList } = useSWR('/api/capacity', fetcher, { refreshInterval })
+  const { data: replList } = useSWR('/api/replication', fetcher, { refreshInterval })
 
   const dbList = Array.isArray(dbs) ? dbs : []
 
@@ -109,7 +109,6 @@ export default function DatabasesPage() {
   const PLACEHOLDERS: Record<string, string> = {
     postgresql: 'SELECT * FROM users LIMIT 10;',
     mysql:      'SELECT * FROM users LIMIT 10;',
-    oracle:     'SELECT * FROM users WHERE ROWNUM <= 10;',
     sqlserver:  'SELECT TOP 10 * FROM users;',
     mongodb:    'db.users.find({}).limit(10)',
     redis:      'INFO server',
@@ -213,7 +212,7 @@ export default function DatabasesPage() {
           const cap  = capByDb[db.id]  as any
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const repl = replByDb[db.id] as any
-          const showCache = ['postgresql', 'mysql', 'sqlserver', 'oracle'].includes(db.engine)
+          const showCache = ['postgresql', 'mysql', 'sqlserver'].includes(db.engine)
           return (
           <div key={db.id} className="rounded-2xl bg-[#0f1629] border border-slate-800 hover:border-slate-700 transition-colors p-5">
             <div className="flex items-start justify-between mb-3">

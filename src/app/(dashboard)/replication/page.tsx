@@ -4,6 +4,8 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { GitBranch, AlertTriangle, CheckCircle, Clock, Activity, X, Copy, Check } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
+import { useAppTimezone, formatAppDate } from '@/lib/use-app-timezone'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -33,7 +35,9 @@ function CopyBtn({ text }: { text: string }) {
 }
 
 export default function ReplicationPage() {
-  const { data: replication } = useSWR('/api/replication', fetcher, { refreshInterval: 15000 })
+  const refreshInterval = useAppRefreshInterval(15)
+  const appTimezone = useAppTimezone()
+  const { data: replication } = useSWR('/api/replication', fetcher, { refreshInterval })
   const list = Array.isArray(replication) ? replication as ReplNode[] : []
   const [selected, setSelected] = useState<ReplNode | null>(null)
 
@@ -118,7 +122,6 @@ export default function ReplicationPage() {
         {[
           { engine: 'PostgreSQL', tips: ['Monitor pg_stat_replication for lag', 'Set wal_keep_size to prevent WAL removal', 'Use synchronous_commit=remote_apply for zero-lag RPO'] },
           { engine: 'MySQL/MariaDB', tips: ['Check SHOW SLAVE STATUS\\G for lag', 'Use GTID replication for easier failover', 'Enable parallel replication (slave_parallel_workers)'] },
-          { engine: 'Oracle Data Guard', tips: ['Monitor V$DATAGUARD_STATS for lag', 'Use Maximum Availability protection mode', 'Test switchover regularly (once/quarter)'] },
         ].map(g => (
           <div key={g.engine} className="rounded-2xl bg-[#0f1629] border border-slate-800 p-4">
             <h4 className="text-xs font-bold text-slate-300 mb-2">{g.engine}</h4>
@@ -220,7 +223,7 @@ export default function ReplicationPage() {
                   <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
                     <div className="text-slate-500 mb-1">Last Synced</div>
                     <div className="font-bold text-white">{timeAgo(r.lastSyncAt)}</div>
-                    <div className="text-[10px] text-slate-600 mt-0.5">{new Date(r.lastSyncAt).toLocaleString()}</div>
+                    <div className="text-[10px] text-slate-600 mt-0.5">{formatAppDate(r.lastSyncAt, appTimezone, { dateStyle: 'medium', timeStyle: 'short' })}</div>
                   </div>
                 </div>
 

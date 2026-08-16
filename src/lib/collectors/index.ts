@@ -13,7 +13,10 @@ const DATA_DIR = path.join(process.cwd(), 'data')
 
 function saveJson(file: string, data: unknown) {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-  fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2), 'utf8')
+  const target = path.join(DATA_DIR, file)
+  const temp = `${target}.${process.pid}.tmp`
+  fs.writeFileSync(temp, JSON.stringify(data, null, 2), 'utf8')
+  fs.renameSync(temp, target)
 }
 function loadJson<T>(file: string, def: T): T {
   const p = path.join(DATA_DIR, file)

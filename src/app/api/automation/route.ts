@@ -13,6 +13,12 @@ export async function POST(req: NextRequest) {
   const auth = await requireRole(req, 'editor')
   if (auth instanceof NextResponse) return auth
   const body = await req.json()
+  if (typeof body.name !== 'string' || !body.name.trim() || !Array.isArray(body.actions) || body.actions.length === 0) {
+    return NextResponse.json({ error: 'Rule name and at least one action are required' }, { status: 400 })
+  }
+  if (!['cron', 'threshold', 'manual'].includes(body.trigger ?? 'cron')) {
+    return NextResponse.json({ error: 'Invalid automation trigger' }, { status: 400 })
+  }
   const rule = {
     id: `rule-${crypto.randomUUID().slice(0, 8)}`,
     name: body.name,

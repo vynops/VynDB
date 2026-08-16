@@ -5,6 +5,7 @@ import useSWR from 'swr'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { Activity, Cpu, HardDrive, Database } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -26,13 +27,14 @@ function MetricCard({ label, value, unit, color, sub }: { label: string; value: 
 }
 
 export default function PerformancePage() {
+  const refreshInterval = useAppRefreshInterval(30)
   const { data: dbs } = useSWR('/api/databases', fetcher)
   const dbList = Array.isArray(dbs) ? dbs : []
   const [selectedDb, setSelectedDb] = useState<string>('')
   const [range, setRange] = useState(24)
 
   const dbId = selectedDb || (dbList[0] as { id: string } | undefined)?.id || ''
-  const { data: perfData } = useSWR(dbId ? `/api/performance?dbId=${dbId}&hours=${range}` : null, fetcher, { refreshInterval: 30000 })
+  const { data: perfData } = useSWR(dbId ? `/api/performance?dbId=${dbId}&hours=${range}` : null, fetcher, { refreshInterval })
 
   const snapshots = Array.isArray(perfData) ? perfData : []
   const latest = snapshots[snapshots.length - 1]

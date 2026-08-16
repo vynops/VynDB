@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole, getSessionFromRequest } from '@/lib/auth'
 import { runBackup, runAllBackups } from '@/lib/backup-runner'
 import { loadDatabases } from '@/lib/db-store'
+import { getSettings } from '@/lib/settings-store'
 
 const COLLECTOR_TOKEN = process.env.VYNDB_COLLECTOR_TOKEN ?? 'vyndb_collector_token_lab_2024'
 
@@ -19,16 +20,17 @@ export async function POST(req: NextRequest) {
 
   const { dbId, type, path: customPath } = await req.json().catch(() => ({})) as { dbId?: string; type?: string; path?: string }
   const backupType = (['full', 'schema-only', 'data-only'].includes(type ?? '') ? type : 'full') as 'full' | 'schema-only' | 'data-only'
+  const effectivePath = customPath || getSettings().backupPath || undefined
 
   if (dbId) {
     const db = loadDatabases().find(d => d.id === dbId)
     if (!db) return NextResponse.json({ error: 'DB not found' }, { status: 404 })
-    const result = await runBackup(db, backupType, customPath || undefined)
+    const result = await runBackup(db, backupType, effectivePath)
     return NextResponse.json(result, { status: result.ok ? 200 : 500 })
   }
 
   // Run all backups
-  const results = await runAllBackups(backupType, customPath || undefined)
+  const results = await runAllBackups(backupType, effectivePath)
   const failed = results.filter(r => !r.ok)
   return NextResponse.json({
     ok: failed.length === 0,

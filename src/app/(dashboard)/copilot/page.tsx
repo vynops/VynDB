@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react'
 import useSWR from 'swr'
 import { Bot, Send, Loader2, Sparkles, User, Zap, BarChart3, Shield, HardDrive, AlertCircle, Database, History, Plus, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
+import { useAppTimezone, formatAppDate } from '@/lib/use-app-timezone'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -78,12 +80,14 @@ const CAPABILITIES: { label: string; icon: React.ComponentType<{ size?: number; 
 
 const WELCOME: Message = {
   role: 'assistant',
-  content: `Hello! I'm your **VynDB AI Copilot**, powered by Groq. I have context about all your connected databases and can help you with:\n\n• **Query optimization** — explain plans, index suggestions, rewrites\n• **Performance analysis** — bottleneck diagnosis, connection pool tuning\n• **Security guidance** — privilege audits, encryption, CIS benchmarks\n• **Capacity planning** — storage projections, archival strategies\n• **Incident RCA** — root cause analysis for database incidents\n• **Backup & recovery** — PITR setup, RPO/RTO optimization\n\nUse the **category tabs below** to see suggested prompts for each topic, or just type your question.`,
+  content: `Hello! I'm your **VynDB AI Copilot**. I use the provider configured in Settings and ground answers in your connected database evidence. I can help with:\n\n• **Query intelligence** — plans, indexes, bottlenecks, and verification\n• **Performance diagnosis** — waits, blockers, connections, and capacity\n• **Security guidance** — privileges, encryption, configuration, and evidence\n• **Incident RCA** — evidence-based root cause analysis\n• **Backup & recovery** — integrity, restore readiness, and RPO/RTO\n\nI will identify data limitations and ask for approval before destructive actions.`,
   ts: Date.now(),
 }
 
 export default function CopilotPage() {
-  const { data: usage } = useSWR('/api/copilot/usage', fetcher, { refreshInterval: 10000 })
+  const refreshInterval = useAppRefreshInterval(30)
+  const appTimezone = useAppTimezone()
+  const { data: usage } = useSWR('/api/copilot/usage', fetcher, { refreshInterval })
   const { data: dbs } = useSWR('/api/databases', fetcher)
   const { data: historyList, mutate: mutateHistory } = useSWR('/api/copilot/history', fetcher)
   const dbList = Array.isArray(dbs) ? dbs : []
@@ -180,7 +184,8 @@ export default function CopilotPage() {
   }
 
   function renderMarkdown(text: string) {
-    return text
+    const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+    return escaped
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/`([^`]+)`/g, '<code class="bg-slate-800 px-1 py-0.5 rounded text-emerald-300 text-[11px] font-mono">$1</code>')
@@ -227,7 +232,7 @@ export default function CopilotPage() {
                   <History size={11} className="text-slate-500 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-slate-300 truncate">{s.title}</div>
-                    <div className="text-[10px] text-slate-600">{new Date(s.updatedAt).toLocaleString()} · {s.messageCount} messages</div>
+                    <div className="text-[10px] text-slate-600">{formatAppDate(s.updatedAt, appTimezone, { dateStyle: 'medium', timeStyle: 'short' })} · {s.messageCount} messages</div>
                   </div>
                   <button onClick={e => deleteSession(s.id, e)}
                     className="p-1 rounded hover:bg-red-500/10 text-slate-600 hover:text-red-400 flex-shrink-0">
@@ -312,7 +317,7 @@ export default function CopilotPage() {
             {loading ? <Loader2 size={14} className="animate-spin text-white" /> : <Send size={14} className="text-white" />}
           </button>
         </div>
-        <div className="text-[10px] text-slate-600 text-center mt-1.5">Powered by Groq · Responses may not always be accurate — verify critical advice</div>
+        <div className="text-[10px] text-slate-600 text-center mt-1.5">AI advice is grounded in available VynDB evidence — verify critical changes before execution</div>
       </div>
     </div>
   )

@@ -4,11 +4,13 @@ import useSWR from 'swr'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Bell, RefreshCw, LogOut } from 'lucide-react'
+import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 export default function Header({ title, subtitle }: { title: string; subtitle: string }) {
-  const { data: incidents } = useSWR('/api/incidents?status=open', fetcher, { refreshInterval: 30000 })
+  const refreshInterval = useAppRefreshInterval(30)
+  const { data: incidents } = useSWR('/api/incidents?status=open', fetcher, { refreshInterval })
   const openCount = Array.isArray(incidents) ? incidents.length : 0
   const router = useRouter()
 
