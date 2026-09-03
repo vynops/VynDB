@@ -5,7 +5,7 @@ import { createSession, sessionCookieName } from '@/lib/auth'
 export async function POST(req: NextRequest) {
   const { email, password } = await req.json() as { email: string; password: string }
   const user = findUserByEmail(email)
-  if (!user || !verifyPassword(password, user.passwordHash, user.passwordSalt)) {
+  if (!user || !user.active || !verifyPassword(password, user.passwordHash, user.passwordSalt)) {
     return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
   }
   touchLastLogin(user.id)

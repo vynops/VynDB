@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { getSettings } from '@/lib/settings-store'
 
+const GROQ_DEFAULT_MODEL = 'openai/gpt-oss-120b'
+const RETIRED_GROQ_MODELS = new Set(['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'])
+
 export async function POST(req: NextRequest) {
   const auth = await requireRole(req, 'admin')
   if (auth instanceof NextResponse) return auth
@@ -13,7 +16,9 @@ export async function POST(req: NextRequest) {
       ? provider === 'groq' ? settings.groqApiKey || process.env.GROQ_API_KEY : settings.aiApiKey
       : requestedApiKey
 
-    if (!provider || !apiKey || !model) {
+    const effectiveModel = provider === 'groq' && (!model || RETIRED_GROQ_MODELS.has(model)) ? GROQ_DEFAULT_MODEL : model
+
+    if (!provider || !apiKey || !effectiveModel) {
       return NextResponse.json(
         { ok: false, message: 'Missing provider, apiKey, or model' },
         { status: 400 }
@@ -27,8 +32,8 @@ export async function POST(req: NextRequest) {
     try {
       switch (provider) {
         case 'groq':
-          testOk = await testGroq(apiKey, model)
-          testMessage = testOk ? `Connected to Groq (${model})` : 'Failed to connect to Groq'
+          testOk = await testGroq(apiKey, effectiveModel)
+          testMessage = testOk ? `Connected to Groq (${effectiveModel})` : `Groq model is not available: ${effectiveModel}`
           break
 
         case 'openai':
@@ -90,7 +95,9 @@ async function testGroq(apiKey: string, model: string): Promise<boolean> {
   const res = await fetch('https://api.groq.com/openai/v1/models', {
     headers: { Authorization: `Bearer ${apiKey}` },
   })
-  return res.ok
+  if (!res.ok) return false
+  const data = await res.json() as { data?: Array<{ id?: string }> }
+  return Boolean(data.data?.some(item => item.id === model))
 }
 
 async function testOpenAi(apiKey: string, model: string): Promise<boolean> {

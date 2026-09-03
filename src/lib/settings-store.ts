@@ -57,7 +57,7 @@ const DEFAULTS: AppSettings = {
   smtpPassword: '',
   smtpFrom: '',
   aiProvider: 'groq',
-  aiModel: 'llama-3.3-70b-versatile',
+  aiModel: 'openai/gpt-oss-120b',
   aiApiKey: process.env.GROQ_API_KEY ?? '',
   aiBaseUrl: '',
   groqApiKey: process.env.GROQ_API_KEY ?? '',  // backward compatibility
@@ -85,7 +85,10 @@ export function getSettings(): AppSettings {
   if (!fs.existsSync(SETTINGS_FILE)) return { ...DEFAULTS }
   try {
     const raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) as Partial<AppSettings>
-    return { ...DEFAULTS, ...raw }
+    const merged: AppSettings = { ...DEFAULTS, ...raw }
+    const retiredGroqModels = new Set(['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'])
+    if (merged.aiProvider === 'groq' && retiredGroqModels.has(merged.aiModel)) merged.aiModel = DEFAULTS.aiModel
+    return merged
   } catch {
     return { ...DEFAULTS }
   }

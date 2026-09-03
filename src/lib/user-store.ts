@@ -9,6 +9,7 @@ export interface User {
   email: string
   name: string
   role: UserRole
+  active: boolean
   passwordHash: string
   passwordSalt: string
   createdAt: string
@@ -33,7 +34,8 @@ function readUsers(): User[] {
     return users
   }
   try {
-    return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')) as User[]
+    return (JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')) as User[])
+      .map(user => ({ ...user, active: user.active !== false }))
   } catch {
     return []
   }
@@ -51,6 +53,7 @@ function buildUser(data: { email: string; name: string; role: UserRole; password
     email: data.email,
     name: data.name,
     role: data.role,
+    active: true,
     passwordHash: hash,
     passwordSalt: salt,
     createdAt: new Date().toISOString(),
@@ -89,12 +92,13 @@ export function createUser(data: { email: string; name: string; role: UserRole; 
   return user
 }
 
-export function updateUser(id: string, updates: Partial<Pick<User, 'name' | 'role'> & { password?: string }>): User {
+export function updateUser(id: string, updates: Partial<Pick<User, 'name' | 'role' | 'active'> & { password?: string }>): User {
   const users = readUsers()
   const idx = users.findIndex(u => u.id === id)
   if (idx === -1) throw new Error('User not found')
   if (updates.name) users[idx].name = updates.name
   if (updates.role) users[idx].role = updates.role
+  if (typeof updates.active === 'boolean') users[idx].active = updates.active
   if (updates.password) {
     const { hash, salt } = hashPassword(updates.password)
     users[idx].passwordHash = hash

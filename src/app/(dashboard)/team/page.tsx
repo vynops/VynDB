@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
-import { Users, Plus, Edit2, Trash2, X, Loader2, Shield } from 'lucide-react'
+import { Users, Plus, Edit2, Trash2, X, Loader2, Eye, EyeOff, Power } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -19,7 +19,7 @@ const ROLE_DESC: Record<string, string> = {
   viewer: 'Read-only: view all data, cannot make changes',
 }
 
-interface User { id: string; email: string; name: string; role: string; createdAt: string; lastLogin?: string }
+interface User { id: string; email: string; name: string; role: string; active: boolean; createdAt: string; lastLogin?: string }
 
 export default function TeamPage() {
   const { data: users, mutate } = useSWR('/api/team', fetcher)
@@ -31,9 +31,11 @@ export default function TeamPage() {
   const [form, setForm] = useState({ name: '', email: '', role: 'viewer', password: '' })
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null)
 
-  const openAdd = () => { setEditId(null); setForm({ name: '', email: '', role: 'viewer', password: '' }); setShowModal(true) }
-  const openEdit = (u: User) => { setEditId(u.id); setForm({ name: u.name, email: u.email, role: u.role, password: '' }); setShowModal(true) }
+  const openAdd = () => { setEditId(null); setForm({ name: '', email: '', role: 'viewer', password: '' }); setShowPassword(false); setShowModal(true) }
+  const openEdit = (u: User) => { setEditId(u.id); setForm({ name: u.name, email: u.email, role: u.role, password: '' }); setShowPassword(false); setShowModal(true) }
 
   const handleSave = async () => {
     setSaving(true)
@@ -61,6 +63,17 @@ export default function TeamPage() {
     await fetch(`/api/team/${id}`, { method: 'DELETE' })
     mutate()
     setDeleting(null)
+  }
+
+  const handleStatusChange = async (user: User) => {
+    setUpdatingStatus(user.id)
+    await fetch(`/api/team/${user.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !user.active }),
+    })
+    mutate()
+    setUpdatingStatus(null)
   }
 
   return (
@@ -106,11 +119,17 @@ export default function TeamPage() {
                 {user.lastLogin && <div className="text-[10px] text-slate-600">Last login: {new Date(user.lastLogin).toLocaleDateString()}</div>}
               </div>
               <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex-shrink-0', ROLE_COLOR[user.role])}>{user.role}</span>
+              <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex-shrink-0', user.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700 text-slate-400')}>{user.active ? 'Active' : 'Inactive'}</span>
               {me?.role === 'admin' && (
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button onClick={() => openEdit(user)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-500 hover:text-slate-300">
                     <Edit2 size={13} />
                   </button>
+                  {user.role !== 'admin' && (
+                    <button onClick={() => handleStatusChange(user)} disabled={updatingStatus === user.id} title={user.active ? 'Deactivate user' : 'Activate user'} aria-label={user.active ? `Deactivate ${user.name}` : `Activate ${user.name}`} className={cn('p-1.5 rounded-lg text-slate-500', user.active ? 'hover:bg-amber-500/10 hover:text-amber-400' : 'hover:bg-emerald-500/10 hover:text-emerald-400')}>
+                      {updatingStatus === user.id ? <Loader2 size={13} className="animate-spin" /> : <Power size={13} />}
+                    </button>
+                  )}
                   {user.id !== me?.id && (
                     <button onClick={() => handleDelete(user.id)} disabled={deleting === user.id} className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400">
                       {deleting === user.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
@@ -152,7 +171,12 @@ export default function TeamPage() {
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-400 block mb-1">{editId ? 'New Password (leave blank to keep)' : 'Password *'}</label>
-                <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="settings-input" />
+                <div className="relative">
+                  <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="settings-input pr-10" />
+                  <button type="button" onClick={() => setShowPassword(value => !value)} title={showPassword ? 'Hide password' : 'Show password'} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                    {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
               </div>
               <button onClick={handleSave} disabled={saving || !form.name || (!editId && (!form.email || !form.password))}
                 className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2">

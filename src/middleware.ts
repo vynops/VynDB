@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSessionFromRequest } from '@/lib/auth'
+import { hasValidSession } from '@/lib/auth-edge'
 
 const PUBLIC_PATHS = ['/login', '/api/auth/login']
 
@@ -17,8 +17,7 @@ export async function middleware(req: NextRequest) {
     response.headers.set('x-request-id', requestId)
     return response
   }
-  const session = await getSessionFromRequest(req)
-  if (!session) {
+  if (!await hasValidSession(req)) {
     const url = req.nextUrl.clone()
     url.pathname = '/login'
     const response = NextResponse.redirect(url)

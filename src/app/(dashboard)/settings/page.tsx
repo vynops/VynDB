@@ -20,12 +20,12 @@ const AI_PROVIDERS = [
     label: 'Groq (Recommended)',
     keyLabel: 'Groq API Key',
     keyPlaceholder: 'gsk_...',
-    defaultModel: 'llama-3.3-70b-versatile',
+    defaultModel: 'openai/gpt-oss-120b',
     models: [
-      { value: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B Versatile' },
-      { value: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant (Fast)' },
-      { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B (Long context)' },
-      { value: 'gemma2-9b-it', label: 'Gemma 2 9B IT' },
+      { value: 'openai/gpt-oss-120b', label: 'GPT OSS 120B' },
+      { value: 'openai/gpt-oss-20b', label: 'GPT OSS 20B (Fast)' },
+      { value: 'groq/compound', label: 'Groq Compound' },
+      { value: 'groq/compound-mini', label: 'Groq Compound Mini' },
     ],
   },
   {

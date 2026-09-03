@@ -9,9 +9,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json()
   const user = findUserById(id)
   if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (typeof body.active !== 'undefined') {
+    if (typeof body.active !== 'boolean') {
+      return NextResponse.json({ error: 'active must be a boolean' }, { status: 400 })
+    }
+    if (user.role === 'admin' || body.role === 'admin') {
+      return NextResponse.json({ error: 'Admin accounts cannot be activated or deactivated' }, { status: 400 })
+    }
+  }
   const updated = updateUser(id, body)
   if (!updated) return NextResponse.json({ error: 'Update failed' }, { status: 500 })
-  return NextResponse.json({ id: updated.id, email: updated.email, name: updated.name, role: updated.role })
+  return NextResponse.json({ id: updated.id, email: updated.email, name: updated.name, role: updated.role, active: updated.active })
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
