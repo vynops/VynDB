@@ -133,7 +133,7 @@ Paste any SQL/NoSQL query for instant AI-powered analysis.
 - Ready-to-copy `CREATE INDEX` statements
 - Query rewrite suggestions
 - Confidence scoring (0–100%)
-- Per-engine support: PostgreSQL, MySQL, Oracle, SQL Server, MongoDB, Redis, CouchBase
+- Per-engine support: PostgreSQL, MySQL, SQL Server, MongoDB, Redis, CouchBase
 - Query retained per engine when switching — switching back restores your work
 
 ### 📐 Schema Explorer
@@ -246,7 +246,6 @@ AI-generated, human-approved remediation for detected issues.
 | **Redis** | 7+ | `ioredis` | ✅ Full | ✅ Raw commands | ✅ BGSAVE |
 | **SQL Server** | 2019+ | `mssql` | ✅ Full | ✅ | ✅ BACKUP TO DISK |
 | **CouchBase** | 7+ | _(planned)_ | 🔜 | 🔜 | 🔜 |
-| **Oracle** | 19c+ | _(planned)_ | 🔜 | 🔜 | 🔜 |
 
 ---
 
