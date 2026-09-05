@@ -36,7 +36,8 @@ Built on **Next.js 16 App Router** with a lightweight JSON file store and Groq-p
 
 | Overview Dashboard | Database Detail | AI Copilot |
 |---|---|---|
-| _(screenshot)_ | _(screenshot)_ | _(screenshot)_ |
+| <img width="956" height="512" alt="Screenshot 2026-09-01 152207" src="https://github.com/user-attachments/assets/e48c08d5-89c4-4750-a458-768781fb5169" />
+_(screenshot)_ | _(screenshot)_ | _(screenshot)_ |
 
 | Slow Query Analysis | Security Findings | Autonomous Proposals |
 |---|---|---|
