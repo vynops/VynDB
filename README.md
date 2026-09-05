@@ -34,14 +34,41 @@ Built on **Next.js 16 App Router** with a lightweight JSON file store and Groq-p
 
 ## Screenshots
 
-| Overview Dashboard | Database Detail | AI Copilot |
-|---|---|---|
-| _(screenshot)_ | _(screenshot)_ | _(screenshot)_ |
+| 01 · Overview Dashboard | 02 · Database Fleet | 03 · Database Metrics |
+| :---: | :---: | :---: |
+| <img src="screenshots/Screenshot%202026-09-01%20152207.png" alt="Overview Dashboard" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20152248.png" alt="Database Fleet" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20152313.png" alt="Database Metrics" width="400" /> |
 
+| 04 · Query Performance | 05 · Performance Analytics | 06 · Slow Query Log |
+| :---: | :---: | :---: |
+| <img src="screenshots/Screenshot%202026-09-01%20152337.png" alt="Query Performance" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20152401.png" alt="Performance Analytics" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20152440.png" alt="Slow Query Log" width="400" /> |
 
-| Slow Query Analysis | Security Findings | Autonomous Proposals |
-|---|---|---|
-| _(screenshot)_ | _(screenshot)_ | _(screenshot)_ |
+| 07 · Slow Query Analysis | 08 · AI Query Tuning | 09 · Security Posture |
+| :---: | :---: | :---: |
+| <img src="screenshots/Screenshot%202026-09-01%20152500.png" alt="Slow Query Analysis" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20152532.png" alt="AI Query Tuning" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20152547.png" alt="Security Posture" width="400" /> |
+
+| 10 · Security Findings | 11 · Autonomous Remediation | 12 · Autonomous Proposals |
+| :---: | :---: | :---: |
+| <img src="screenshots/Screenshot%202026-09-01%20152607.png" alt="Security Findings" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20152626.png" alt="Autonomous Remediation" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20152643.png" alt="Autonomous Proposals" width="400" /> |
+
+| 13 · Backup Management | 14 · Backup Schedules | 15 · Replication Topology |
+| :---: | :---: | :---: |
+| <img src="screenshots/Screenshot%202026-09-01%20152659.png" alt="Backup Management" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20152723.png" alt="Backup Schedules" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20152752.png" alt="Replication Topology" width="400" /> |
+
+| 16 · Capacity & Forecasting | 17 · Schema Explorer | 18 · AI Copilot Assistant |
+| :---: | :---: | :---: |
+| <img src="screenshots/Screenshot%202026-09-01%20152836.png" alt="Capacity & Forecasting" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20152923.png" alt="Schema Explorer" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20153003.png" alt="AI Copilot Assistant" width="400" /> |
+
+| 19 · Incident Management | 20 · SLA Tracker | 21 · On-Call Schedules |
+| :---: | :---: | :---: |
+| <img src="screenshots/Screenshot%202026-09-01%20153022.png" alt="Incident Management" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20153039.png" alt="SLA Tracker" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20153055.png" alt="On-Call Schedules" width="400" /> |
+
+| 22 · Automation Rules | 23 · Query Console | 24 · Database Routing |
+| :---: | :---: | :---: |
+| <img src="screenshots/Screenshot%202026-09-01%20153119.png" alt="Automation Rules" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20153139.png" alt="Query Console" width="400" /> | <img src="screenshots/Screenshot%202026-09-01%20153200.png" alt="Database Routing" width="400" /> |
+
+| 25 · Diagnostics & Health | - | - |
+| :---: | :---: | :---: |
+| <img src="screenshots/Screenshot%202026-09-01%20153232.png" alt="Diagnostics & Health" width="400" /> | | |
 
 ---
 
