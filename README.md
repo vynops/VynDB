@@ -36,33 +36,7 @@ Built on **Next.js 16 App Router** with a lightweight JSON file store and Groq-p
 
 | Overview Dashboard | Database Detail | AI Copilot |
 |---|---|---|
-| <div align="center">
-
-<table>
-<tr>
-<td width="50%">
-<img src="https://github.com/user-attachments/assets/e48c08d5-89c4-4750-a458-768781fb5169"
-     alt="VynDC Overview Dashboard"
-     width="100%">
-</td>
-
-<td width="50%">
-<img src="https://github.com/user-attachments/assets/f651884d-d17e-4692-9060-7c8c57e530fa"
-     alt="VynDC Incident Management"
-     width="100%">
-</td>
-</tr>
-
-<tr>
-<td colspan="2" align="center">
-<img src="https://github.com/user-attachments/assets/c77cacb4-f668-4a4b-8485-c8500af594eb"
-     alt="VynDC Infrastructure Dashboard"
-     width="70%">
-</td>
-</tr>
-</table>
-
-</div>
+| <img width="956" height="512" alt="Screenshot 2026-09-01 152207" src="https://github.com/user-attachments/assets/e48c08d5-89c4-4750-a458-768781fb5169" /> |<img width="955" height="512" alt="Screenshot 2026-09-01 152248" src="https://github.com/user-attachments/assets/f651884d-d17e-4692-9060-7c8c57e530fa" /> | <img width="958" height="512" alt="Screenshot 2026-09-01 152313" src="https://github.com/user-attachments/assets/c77cacb4-f668-4a4b-8485-c8500af594eb" />
 
 _(screenshot)_ | _(screenshot)_ | _(screenshot)_ |
 
