@@ -36,57 +36,59 @@ Built on **Next.js 16 App Router** with a lightweight JSON file store and Groq-p
 
 ## Screenshots
 
+## Screenshots
+
 | 01 · Overview Dashboard | 02 · Database Fleet |
 | :---: | :---: |
 | <a href="screenshots/Screenshot%202026-09-01%20152207.png"><img src="screenshots/Screenshot%202026-09-01%20152207.png" alt="Overview Dashboard" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152248.png"><img src="screenshots/Screenshot%202026-09-01%20152248.png" alt="Database Fleet" width="100%" /></a> |
 
-| 03 · Database Metrics | 04 · Query Performance |
+| 03 · Performance Monitoring | 04 · Query Latency & Throughput |
 | :---: | :---: |
-| <a href="screenshots/Screenshot%202026-09-01%20152313.png"><img src="screenshots/Screenshot%202026-09-01%20152313.png" alt="Database Metrics" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152337.png"><img src="screenshots/Screenshot%202026-09-01%20152337.png" alt="Query Performance" width="100%" /></a> |
+| <a href="screenshots/Screenshot%202026-09-01%20152313.png"><img src="screenshots/Screenshot%202026-09-01%20152313.png" alt="Performance Monitoring" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152337.png"><img src="screenshots/Screenshot%202026-09-01%20152337.png" alt="Query Latency & Throughput" width="100%" /></a> |
 
-| 05 · Performance Analytics | 06 · Slow Query Log |
+| 05 · Resource Utilization | 06 · Slow Query Log |
 | :---: | :---: |
-| <a href="screenshots/Screenshot%202026-09-01%20152401.png"><img src="screenshots/Screenshot%202026-09-01%20152401.png" alt="Performance Analytics" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152440.png"><img src="screenshots/Screenshot%202026-09-01%20152440.png" alt="Slow Query Log" width="100%" /></a> |
+| <a href="screenshots/Screenshot%202026-09-01%20152401.png"><img src="screenshots/Screenshot%202026-09-01%20152401.png" alt="Resource Utilization" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152440.png"><img src="screenshots/Screenshot%202026-09-01%20152440.png" alt="Slow Query Log" width="100%" /></a> |
 
-| 07 · Slow Query Analysis | 08 · AI Query Tuning |
+| 07 · AI Query Bottleneck Analysis | 08 · AI Index Recommendations |
 | :---: | :---: |
-| <a href="screenshots/Screenshot%202026-09-01%20152500.png"><img src="screenshots/Screenshot%202026-09-01%20152500.png" alt="Slow Query Analysis" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152532.png"><img src="screenshots/Screenshot%202026-09-01%20152532.png" alt="AI Query Tuning" width="100%" /></a> |
+| <a href="screenshots/Screenshot%202026-09-01%20152500.png"><img src="screenshots/Screenshot%202026-09-01%20152500.png" alt="AI Query Bottleneck Analysis" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152532.png"><img src="screenshots/Screenshot%202026-09-01%20152532.png" alt="AI Index Recommendations" width="100%" /></a> |
 
-| 09 · Security Posture | 10 · Security Findings |
+| 09 · Security Posture Audit | 10 · Security Findings & Hardening |
 | :---: | :---: |
-| <a href="screenshots/Screenshot%202026-09-01%20152547.png"><img src="screenshots/Screenshot%202026-09-01%20152547.png" alt="Security Posture" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152607.png"><img src="screenshots/Screenshot%202026-09-01%20152607.png" alt="Security Findings" width="100%" /></a> |
+| <a href="screenshots/Screenshot%202026-09-01%20152547.png"><img src="screenshots/Screenshot%202026-09-01%20152547.png" alt="Security Posture Audit" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152607.png"><img src="screenshots/Screenshot%202026-09-01%20152607.png" alt="Security Findings & Hardening" width="100%" /></a> |
 
 | 11 · Autonomous Remediation | 12 · Autonomous Proposals |
 | :---: | :---: |
 | <a href="screenshots/Screenshot%202026-09-01%20152626.png"><img src="screenshots/Screenshot%202026-09-01%20152626.png" alt="Autonomous Remediation" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152643.png"><img src="screenshots/Screenshot%202026-09-01%20152643.png" alt="Autonomous Proposals" width="100%" /></a> |
 
-| 13 · Backup Management | 14 · Backup Schedules |
+| 13 · Backup Management | 14 · Automated Backup Schedules |
 | :---: | :---: |
-| <a href="screenshots/Screenshot%202026-09-01%20152659.png"><img src="screenshots/Screenshot%202026-09-01%20152659.png" alt="Backup Management" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152723.png"><img src="screenshots/Screenshot%202026-09-01%20152723.png" alt="Backup Schedules" width="100%" /></a> |
+| <a href="screenshots/Screenshot%202026-09-01%20152659.png"><img src="screenshots/Screenshot%202026-09-01%20152659.png" alt="Backup Management" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152723.png"><img src="screenshots/Screenshot%202026-09-01%20152723.png" alt="Automated Backup Schedules" width="100%" /></a> |
 
-| 15 · Replication Topology | 16 · Capacity & Forecasting |
+| 15 · Replication Topology | 16 · Capacity Planning & Forecasting |
 | :---: | :---: |
-| <a href="screenshots/Screenshot%202026-09-01%20152752.png"><img src="screenshots/Screenshot%202026-09-01%20152752.png" alt="Replication Topology" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152836.png"><img src="screenshots/Screenshot%202026-09-01%20152836.png" alt="Capacity & Forecasting" width="100%" /></a> |
+| <a href="screenshots/Screenshot%202026-09-01%20152752.png"><img src="screenshots/Screenshot%202026-09-01%20152752.png" alt="Replication Topology" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152836.png"><img src="screenshots/Screenshot%202026-09-01%20152836.png" alt="Capacity Planning & Forecasting" width="100%" /></a> |
 
-| 17 · Schema Explorer | 18 · AI Copilot Assistant |
+| 17 · Schema Explorer | 18 · AI Database Copilot |
 | :---: | :---: |
-| <a href="screenshots/Screenshot%202026-09-01%20152923.png"><img src="screenshots/Screenshot%202026-09-01%20152923.png" alt="Schema Explorer" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20153003.png"><img src="screenshots/Screenshot%202026-09-01%20153003.png" alt="AI Copilot Assistant" width="100%" /></a> |
+| <a href="screenshots/Screenshot%202026-09-01%20152923.png"><img src="screenshots/Screenshot%202026-09-01%20152923.png" alt="Schema Explorer" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20153003.png"><img src="screenshots/Screenshot%202026-09-01%20153003.png" alt="AI Database Copilot" width="100%" /></a> |
 
-| 19 · Incident Management | 20 · SLA Tracker |
+| 19 · Incident Management | 20 · SLA Tracker & Breach Warnings |
 | :---: | :---: |
-| <a href="screenshots/Screenshot%202026-09-01%20153022.png"><img src="screenshots/Screenshot%202026-09-01%20153022.png" alt="Incident Management" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20153039.png"><img src="screenshots/Screenshot%202026-09-01%20153039.png" alt="SLA Tracker" width="100%" /></a> |
+| <a href="screenshots/Screenshot%202026-09-01%20153022.png"><img src="screenshots/Screenshot%202026-09-01%20153022.png" alt="Incident Management" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20153039.png"><img src="screenshots/Screenshot%202026-09-01%20153039.png" alt="SLA Tracker & Breach Warnings" width="100%" /></a> |
 
-| 21 · On-Call Schedules | 22 · Automation Rules |
+| 21 · On-Call Shifts & Escalations | 22 · Automation Rules Engine |
 | :---: | :---: |
-| <a href="screenshots/Screenshot%202026-09-01%20153055.png"><img src="screenshots/Screenshot%202026-09-01%20153055.png" alt="On-Call Schedules" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20153119.png"><img src="screenshots/Screenshot%202026-09-01%20153119.png" alt="Automation Rules" width="100%" /></a> |
+| <a href="screenshots/Screenshot%202026-09-01%20153055.png"><img src="screenshots/Screenshot%202026-09-01%20153055.png" alt="On-Call Shifts & Escalations" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20153119.png"><img src="screenshots/Screenshot%202026-09-01%20153119.png" alt="Automation Rules Engine" width="100%" /></a> |
 
-| 23 · Query Console | 24 · Database Routing |
+| 23 · Multi-Engine Query Console | 24 · Connection & Routing Manager |
 | :---: | :---: |
-| <a href="screenshots/Screenshot%202026-09-01%20153139.png"><img src="screenshots/Screenshot%202026-09-01%20153139.png" alt="Query Console" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20153200.png"><img src="screenshots/Screenshot%202026-09-01%20153200.png" alt="Database Routing" width="100%" /></a> |
+| <a href="screenshots/Screenshot%202026-09-01%20153139.png"><img src="screenshots/Screenshot%202026-09-01%20153139.png" alt="Multi-Engine Query Console" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20153200.png"><img src="screenshots/Screenshot%202026-09-01%20153200.png" alt="Connection & Routing Manager" width="100%" /></a> |
 
-| 25 · Diagnostics & Health | |
+| 25 · Diagnostics & Health Check | |
 | :---: | :---: |
-| <a href="screenshots/Screenshot%202026-09-01%20153232.png"><img src="screenshots/Screenshot%202026-09-01%20153232.png" alt="Diagnostics & Health" width="100%" /></a> | |
+| <a href="screenshots/Screenshot%202026-09-01%20153232.png"><img src="screenshots/Screenshot%202026-09-01%20153232.png" alt="Diagnostics & Health Check" width="100%" /></a> | |
 ---
 
 ## Table of Contents
