@@ -34,10 +34,6 @@ Built on **Next.js 16 App Router** with a lightweight JSON file store and Groq-p
 
 ## Screenshots
 
-## Screenshots
-
-## Screenshots
-
 | 01 · Overview Dashboard | 02 · Database Fleet |
 | :---: | :---: |
 | <a href="screenshots/Screenshot%202026-09-01%20152207.png"><img src="screenshots/Screenshot%202026-09-01%20152207.png" alt="Overview Dashboard" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152248.png"><img src="screenshots/Screenshot%202026-09-01%20152248.png" alt="Database Fleet" width="100%" /></a> |
