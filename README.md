@@ -34,17 +34,39 @@ Built on **Next.js 16 App Router** with a lightweight JSON file store and Groq-p
 
 ## Screenshots
 
-| Overview Dashboard | Database Detail | AI Copilot |
-|---|---|---|
-| _(screenshot)_ | _(screenshot)_ | _(screenshot)_ |
+| 01 · VynDB Login Page | 02 · Overview Dashboard |
+| :---: | :---: |
+| <a href="screenshots/Screenshot%202026-09-01%20152207.png"><img src="screenshots/Screenshot%202026-09-01%20152207.png" alt="VynDB Login Page" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152248.png"><img src="screenshots/Screenshot%202026-09-01%20152248.png" alt="Overview Dashboard" width="100%" /></a> |
 
+| 03 · Database Fleet | 04 · Resource Utilization |
+| :---: | :---: |
+| <a href="screenshots/Screenshot%202026-09-01%20152337.png"><img src="screenshots/Screenshot%202026-09-01%20152337.png" alt="Database Fleet" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152401.png"><img src="screenshots/Screenshot%202026-09-01%20152401.png" alt="Resource Utilization" width="100%" /></a> |
 
-| Slow Query Analysis | Security Findings | Autonomous Proposals |
-|---|---|---|
-| _(screenshot)_ | _(screenshot)_ | _(screenshot)_ |
+| 05 · AI Slow Query Bottleneck Analysis | 06 · Capacity Analysis |
+| :---: | :---: |
+| <a href="screenshots/Screenshot%202026-09-01%20152500.png"><img src="screenshots/Screenshot%202026-09-01%20152500.png" alt="AI Slow Query Bottleneck Analysis" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152547.png"><img src="screenshots/Screenshot%202026-09-01%20152547.png" alt="Capacity Analysis" width="100%" /></a> |
+
+| 07 · Schema Explorer | 08 · AI Copilot |
+| :---: | :---: |
+| <a href="screenshots/Screenshot%202026-09-01%20152607.png"><img src="screenshots/Screenshot%202026-09-01%20152607.png" alt="Schema Explorer" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152626.png"><img src="screenshots/Screenshot%202026-09-01%20152626.png" alt="AI Copilot" width="100%" /></a> |
+
+| 09 · Autonomous Proposals | 10 · Automation Rules |
+| :---: | :---: |
+| <a href="screenshots/Screenshot%202026-09-01%20152643.png"><img src="screenshots/Screenshot%202026-09-01%20152643.png" alt="Autonomous Proposals" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152659.png"><img src="screenshots/Screenshot%202026-09-01%20152659.png" alt="Automation Rules" width="100%" /></a> |
+
+| 11 · Backup & Recovery | 12 · Backup & Recovery Timeline |
+| :---: | :---: |
+| <a href="screenshots/Screenshot%202026-09-01%20152752.png"><img src="screenshots/Screenshot%202026-09-01%20152752.png" alt="Backup & Recovery" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20152923.png"><img src="screenshots/Screenshot%202026-09-01%20152923.png" alt="Backup & Recovery Timeline" width="100%" /></a> |
+
+| 13 · Incident Management | 14 · Routing & Escalations |
+| :---: | :---: |
+| <a href="screenshots/Screenshot%202026-09-01%20153003.png"><img src="screenshots/Screenshot%202026-09-01%20153003.png" alt="Incident Management" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20153039.png"><img src="screenshots/Screenshot%202026-09-01%20153039.png" alt="Routing & Escalations" width="100%" /></a> |
+
+| 15 · Settings - AI Pilot | 16 · Settings - Notifications |
+| :---: | :---: |
+| <a href="screenshots/Screenshot%202026-09-01%20153200.png"><img src="screenshots/Screenshot%202026-09-01%20153200.png" alt="Settings - AI Pilot" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20153232.png"><img src="screenshots/Screenshot%202026-09-01%20153232.png" alt="Settings - Notifications" width="100%" /></a> |
 
 ---
-
 ## Table of Contents
 
 - [Features](#features)
