@@ -1,6 +1,8 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
+import { isStatusStale, STATUS_STALE_MS } from './status-freshness'
+export { STATUS_STALE_MS } from './status-freshness'
 
 export type DbEngine = 'postgresql' | 'mysql' | 'sqlserver' | 'mongodb' | 'redis' | 'couchbase'
 export type DbEnv = 'production' | 'staging' | 'development' | 'test'
@@ -100,6 +102,7 @@ export interface BackupJob {
 
 export interface ReplicationStatus {
   dbId: string
+  collectedAt?: string
   dbName: string
   engine: DbEngine
   role: 'primary' | 'replica' | 'standby' | 'unknown'
@@ -178,28 +181,35 @@ const DEMO_DBS: DbConnection[] = [
   },
 ]
 
-export function loadDatabases(): DbConnection[] {
+function loadStoredDatabases(): DbConnection[] {
   const file = path.join(DATA_DIR, 'databases.json')
   ensureDir()
-  if (!fs.existsSync(file)) {
-    fs.writeFileSync(file, JSON.stringify(DEMO_DBS, null, 2), 'utf8')
-    return DEMO_DBS
-  }
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as DbConnection[]
-    return parsed.filter(db => SUPPORTED_DB_ENGINES.includes(db.engine))
-  } catch { return DEMO_DBS }
+  if (!fs.existsSync(file)) return []
+  const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as DbConnection[]
+  if (!Array.isArray(parsed)) throw new Error('Invalid database store')
+  return parsed.filter(db => SUPPORTED_DB_ENGINES.includes(db.engine))
+}
+
+export function loadDatabases(): DbConnection[] {
+  const now = Date.now()
+  return loadStoredDatabases().map(db => isStatusStale(db.lastChecked, now)
+    ? { ...db, status: 'unknown' as const } : db)
 }
 
 export function saveDatabase(db: DbConnection): void {
-  const list = loadDatabases()
+  const list = loadStoredDatabases()
   const idx = list.findIndex(d => d.id === db.id)
   if (idx === -1) { list.push(db) } else { list[idx] = db }
   save('databases.json', list)
 }
 
+export function recordDatabaseConnectionFailure(id: string): void {
+  const db = loadStoredDatabases().find(item => item.id === id)
+  if (db) saveDatabase({ ...db, status: 'error', healthScore: 0, lastChecked: new Date().toISOString() })
+}
+
 export function deleteDatabase(id: string): void {
-  const list = loadDatabases().filter(d => d.id !== id)
+  const list = loadStoredDatabases().filter(d => d.id !== id)
   save('databases.json', list)
 }
 
@@ -247,11 +257,8 @@ const DEMO_QUERIES: SlowQuery[] = [
 export function loadSlowQueries(): SlowQuery[] {
   const file = path.join(DATA_DIR, 'slow-queries.json')
   ensureDir()
-  if (!fs.existsSync(file)) {
-    fs.writeFileSync(file, JSON.stringify(DEMO_QUERIES, null, 2), 'utf8')
-    return DEMO_QUERIES
-  }
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')) as SlowQuery[] } catch { return DEMO_QUERIES }
+  if (!fs.existsSync(file)) return []
+  return JSON.parse(fs.readFileSync(file, 'utf8')) as SlowQuery[]
 }
 
 export function saveSlowQuery(q: SlowQuery): void {
@@ -357,7 +364,7 @@ const DEMO_SCHEMA: SchemaTable[] = [
 ]
 
 export function loadSchema(): SchemaTable[] {
-  return load('schema.json', DEMO_SCHEMA)
+  return load('schema.json', [])
 }
 
 // ────────── Backups ──────────
@@ -394,7 +401,7 @@ const DEMO_BACKUPS: BackupJob[] = [
   },
 ]
 
-export function loadBackups(): BackupJob[] { return load('backups.json', DEMO_BACKUPS) }
+export function loadBackups(): BackupJob[] { return load('backups.json', []) }
 
 export function saveBackup(b: BackupJob): void {
   const list = loadBackups()
@@ -433,12 +440,13 @@ const DEMO_REPLICATION: ReplicationStatus[] = [
 ]
 
 export function loadReplication(): ReplicationStatus[] {
-  return load('replication.json', DEMO_REPLICATION)
+  return load('replication.json', [])
 }
 
 // ────────── Capacity ──────────
 export interface CapacityEntry {
   dbId: string
+  collectedAt?: string
   dbName: string
   totalSizeMB: number
   dataSizeMB: number
@@ -474,7 +482,7 @@ const DEMO_CAPACITY: CapacityEntry[] = [
 ]
 
 export function loadCapacity(): CapacityEntry[] {
-  return load('capacity.json', DEMO_CAPACITY)
+  return load('capacity.json', [])
 }
 
 // ────────── Security ──────────
@@ -516,7 +524,7 @@ const DEMO_SECURITY: SecurityFinding[] = [
 ]
 
 export function loadSecurity(): SecurityFinding[] {
-  return load('security.json', DEMO_SECURITY)
+  return load('security.json', [])
 }
 
 export function saveSecurityFinding(f: SecurityFinding): void {

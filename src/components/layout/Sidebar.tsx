@@ -47,8 +47,8 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'AIOps',
     items: [
       { href: '/copilot',    label: 'AI Copilot',     icon: Bot },
-      { href: '/autonomous', label: 'Autonomous Ops', icon: Brain },
       { href: '/automation', label: 'Automation',     icon: Terminal },
+      { href: '/autonomous', label: 'Autonomous Ops', icon: Brain },
     ],
   },
   {

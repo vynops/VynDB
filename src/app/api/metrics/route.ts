@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { NextRequest, NextResponse } from 'next/server'
 import { loadCapacity, loadDatabases, loadReplication, loadSecurity, loadSlowQueries } from '@/lib/db-store'
+import { STATUS_STALE_MS } from '@/lib/status-freshness'
 
 const TOKEN = process.env.VYNDB_METRICS_TOKEN ?? process.env.VYNDB_COLLECTOR_TOKEN ?? 'vyndb_collector_token_lab_2024'
 
@@ -26,19 +27,26 @@ export async function GET(req: NextRequest) {
 
   const dbs = loadDatabases()
   const snapshots = loadSnapshots()
+  const cutoff = Date.now() - STATUS_STALE_MS
+  const active = new Set(dbs.filter(db => db.status === 'connected' || db.status === 'warning').map(db => db.id))
   const latest = new Map<string, Record<string, unknown>>()
   for (const snapshot of snapshots) {
+    if (!active.has(String(snapshot.dbId)) || Date.parse(String(snapshot.timestamp)) < cutoff) continue
     const current = latest.get(String(snapshot.dbId))
     if (!current || String(snapshot.timestamp) > String(current.timestamp)) latest.set(String(snapshot.dbId), snapshot)
   }
   const slowQueries = loadSlowQueries()
-  const replication = loadReplication()
-  const capacity = loadCapacity()
+  const replication = loadReplication().filter(item => Date.parse(item.collectedAt ?? '') >= cutoff &&
+    [...active].some(id => item.dbId === id || item.dbId.startsWith(`${id}-`)))
+  const capacity = loadCapacity().filter(item => active.has(item.dbId) && Date.parse(item.collectedAt ?? '') >= cutoff)
   const security = loadSecurity()
   const lines = [
-    '# HELP vyndb_database_health_score Current VynDB database health score.',
-    '# TYPE vyndb_database_health_score gauge',
-    ...dbs.map(db => metric('vyndb_database_health_score', { db_id: db.id, engine: db.engine, database: db.name }, db.healthScore)),
+    '# HELP vyndb_database_status Last known connectivity; unknown means the check is stale.',
+    '# TYPE vyndb_database_status gauge',
+    ...dbs.map(db => metric('vyndb_database_status', { db_id: db.id, engine: db.engine, status: db.status }, 1)),
+    '# HELP vyndb_database_last_checked_timestamp_seconds Time of last database connection check.',
+    '# TYPE vyndb_database_last_checked_timestamp_seconds gauge',
+    ...dbs.filter(db => Number.isFinite(Date.parse(db.lastChecked))).map(db => metric('vyndb_database_last_checked_timestamp_seconds', { db_id: db.id }, Date.parse(db.lastChecked) / 1000)),
     '# HELP vyndb_database_active_connections Current active database connections.',
     '# TYPE vyndb_database_active_connections gauge',
     ...dbs.flatMap(db => { const snapshot = latest.get(db.id); return snapshot ? [metric('vyndb_database_active_connections', { db_id: db.id, engine: db.engine }, Number(snapshot.activeConnections))] : [] }),

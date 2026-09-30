@@ -5,13 +5,14 @@ import useSWR from 'swr'
 import {
   Brain, CheckCircle, XCircle, Clock, Loader2, ChevronDown, ChevronRight,
   Zap, Shield, TrendingDown, Database, AlertTriangle, BarChart3, Code,
-  ToggleLeft, ToggleRight, X, Eye, EyeOff,
+  X, Eye, EyeOff,
 } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
+import { permittedMaintenanceSql } from '@/lib/maintenance-policy'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-type AutonomousStatus = 'pending' | 'approved' | 'executed' | 'dismissed' | 'failed'
+type AutonomousStatus = 'pending' | 'approved' | 'executed' | 'dismissed' | 'failed' | 'unverified'
 type AutonomousRisk = 'low' | 'medium' | 'high'
 type Severity = 'critical' | 'high' | 'medium' | 'low'
 
@@ -20,8 +21,9 @@ interface AutonomousProposal {
   dbId: string; dbName: string; engine: string
   severity: Severity; actionType: string; proposedAction: string
   sql?: string; risk: AutonomousRisk; confidence: number; estimatedGain: string
-  status: AutonomousStatus; autoExecuteEnabled: boolean
+  status: AutonomousStatus
   createdAt: string; executedAt?: string; executedBy?: string; executionOutput?: string
+  evidence?: string[]; requiredPermission?: string; rollback?: string; verification?: string[]
 }
 
 const SEV_CONFIG: Record<Severity, { cls: string; dot: string; label: string }> = {
@@ -71,9 +73,8 @@ export default function AutonomousPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [dismissingId, setDismissingId] = useState<string | null>(null)
-  const [togglingId, setTogglingId] = useState<string | null>(null)
-  const [globalAutoExecute, setGlobalAutoExecute] = useState(false)
-  const [approveResult, setApproveResult] = useState<{ id: string; output: string } | null>(null)
+  const [approveResult, setApproveResult] = useState<{ id: string; output: string; status: string } | null>(null)
+  const [dryRunResult, setDryRunResult] = useState<{ id: string; action: string; sql?: string } | null>(null)
 
   const filtered = proposals
     .filter(p => tab === 'all' || p.status === tab)
@@ -87,7 +88,6 @@ export default function AutonomousPage() {
     pending:  proposals.filter(p => p.status === 'pending').length,
     executed: proposals.filter(p => p.status === 'executed').length,
     dismissed: proposals.filter(p => p.status === 'dismissed').length,
-    autoEnabled: proposals.filter(p => p.autoExecuteEnabled).length,
   }
 
   const handleApprove = async (id: string) => {
@@ -95,8 +95,18 @@ export default function AutonomousPage() {
     try {
       const res = await fetch(`/api/autonomous/${id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) })
       const data = await res.json()
-      setApproveResult({ id, output: data.output ?? 'Executed successfully' })
+      setApproveResult({ id, status: data.status ?? 'failed', output: data.output ?? data.error ?? 'Execution outcome unavailable' })
+      if (data.status !== 'pending') setTab('all')
       mutate()
+    } finally { setApprovingId(null) }
+  }
+
+  const handleDryRun = async (id: string) => {
+    setApprovingId(id)
+    try {
+      const res = await fetch(`/api/autonomous/${id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dryRun: true }) })
+      const data = await res.json()
+      if (res.ok) setDryRunResult({ id, action: data.proposal?.proposedAction ?? '', sql: data.proposal?.sql })
     } finally { setApprovingId(null) }
   }
 
@@ -108,25 +118,13 @@ export default function AutonomousPage() {
     } finally { setDismissingId(null) }
   }
 
-  const handleToggleAuto = async (p: AutonomousProposal) => {
-    setTogglingId(p.id)
-    try {
-      await fetch(`/api/autonomous/${p.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ autoExecuteEnabled: !p.autoExecuteEnabled }),
-      })
-      mutate()
-    } finally { setTogglingId(null) }
-  }
-
   return (
     <div className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
           { label: 'Pending',      value: counts.pending,     color: 'text-yellow-400' },
           { label: 'Executed',     value: counts.executed,    color: 'text-emerald-400' },
-          { label: 'Auto-Execute', value: counts.autoEnabled, color: 'text-blue-400' },
           { label: 'Dismissed',    value: counts.dismissed,   color: 'text-slate-400' },
         ].map(s => (
           <div key={s.label} className="bg-slate-900/60 border border-slate-800/60 rounded-xl p-4">
@@ -136,40 +134,21 @@ export default function AutonomousPage() {
         ))}
       </div>
 
-      {/* Header + Global Auto-Execute toggle */}
+      {/* Header + approval gate status */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div>
           <h2 className="text-lg font-bold text-white">Autonomous Ops</h2>
           <p className="text-sm text-slate-400 mt-0.5">AI-detected issues with proposed self-healing actions</p>
         </div>
-        <div className={cn(
-          'flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium',
-          globalAutoExecute
-            ? 'bg-red-500/10 border-red-500/30 text-red-400'
-            : 'bg-slate-800/40 border-slate-700/40 text-slate-400'
-        )}>
-          <button onClick={() => {
-            if (!globalAutoExecute && !confirm('Enable global auto-execute? Low-risk actions will execute without approval. This cannot be undone per-action.')) return
-            setGlobalAutoExecute(v => !v)
-          }}>
-            {globalAutoExecute ? <ToggleRight size={18} className="text-red-400" /> : <ToggleLeft size={18} />}
-          </button>
-          <span className="text-xs">
-            Global Auto-Execute: <span className={globalAutoExecute ? 'text-red-400 font-bold' : 'text-slate-500'}>{globalAutoExecute ? 'ON' : 'OFF'}</span>
-          </span>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border bg-emerald-500/10 border-emerald-500/20 text-emerald-400 text-xs font-medium">
+          <Shield size={15} /> Approval gate active · no global auto-execution
         </div>
       </div>
 
-      {/* Global auto-execute warning */}
-      {globalAutoExecute && (
-        <div className="flex items-start gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-          <AlertTriangle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
-          <div>
-            <div className="text-sm font-semibold text-red-400">Global Auto-Execute is ON</div>
-            <div className="text-xs text-red-400/70 mt-0.5">All proposals marked for auto-execute will run immediately without approval. Only low-risk actions are eligible. High/critical risk actions always require manual approval.</div>
-          </div>
-        </div>
-      )}
+      <div className="flex items-start gap-3 p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
+        <Eye size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
+        <div className="text-xs text-blue-200/70">Review the evidence and preview the action before approving. Only supported maintenance can run here; other actions require manual execution.</div>
+      </div>
 
       {/* Tabs + Severity filter */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
@@ -255,6 +234,16 @@ export default function AutonomousPage() {
                               <XCircle size={12} /> Failed
                             </span>
                           )}
+                          {proposal.status === 'unverified' && (
+                            <span className="flex items-center gap-1 text-xs text-amber-400 font-medium">
+                              <AlertTriangle size={12} /> Needs investigation
+                            </span>
+                          )}
+                          {proposal.status === 'approved' && (
+                            <span className="flex items-center gap-1 text-xs text-blue-400 font-medium">
+                              <Eye size={12} /> Manual action
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -284,26 +273,49 @@ export default function AutonomousPage() {
                       <code className="text-xs text-cyan-400 font-mono">{proposal.proposedAction}</code>
                     </div>
 
+                    {proposal.evidence && proposal.evidence.length > 0 && (
+                      <div className="mt-2 p-2.5 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                        <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Evidence</div>
+                        <ul className="text-[11px] text-slate-300 space-y-1">{proposal.evidence.map((item, index) => <li key={index}>• {item}</li>)}</ul>
+                      </div>
+                    )}
+
+                    {(proposal.requiredPermission || proposal.rollback || (proposal.verification && proposal.verification.length > 0)) && (
+                      <div className="mt-2 grid sm:grid-cols-3 gap-2 text-[11px]">
+                        {proposal.requiredPermission && <div className="p-2 rounded-lg bg-slate-950/40 border border-slate-700/30"><div className="text-slate-500 mb-1">Permission</div><div className="text-slate-300">{proposal.requiredPermission}</div></div>}
+                        {proposal.rollback && <div className="p-2 rounded-lg bg-slate-950/40 border border-slate-700/30"><div className="text-slate-500 mb-1">Rollback</div><div className="text-slate-300">{proposal.rollback}</div></div>}
+                        {proposal.verification && proposal.verification.length > 0 && <div className="p-2 rounded-lg bg-slate-950/40 border border-slate-700/30"><div className="text-slate-500 mb-1">Verify after action</div><div className="text-slate-300">{proposal.verification.join(' ')}</div></div>}
+                      </div>
+                    )}
+
                     {/* Execution output */}
-                    {proposal.status === 'executed' && proposal.executionOutput && (
-                      <div className="mt-2 p-2.5 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
-                        <div className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider mb-1">
-                          Output · {proposal.executedAt ? timeAgo(proposal.executedAt) : ''} by {proposal.executedBy}
+                    {proposal.executionOutput && (
+                      <div className={cn('mt-2 p-2.5 rounded-lg border', proposal.status === 'executed' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20')}>
+                        <div className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                          {proposal.status === 'executed' ? 'Verified' : proposal.status === 'unverified' ? 'Investigate before retrying' : 'Outcome'} · {proposal.executedBy ?? 'operator'}
                         </div>
-                        <pre className="text-[11px] text-emerald-300/80 font-mono whitespace-pre-wrap">{proposal.executionOutput}</pre>
+                        <pre className="text-[11px] text-slate-300 font-mono whitespace-pre-wrap">{proposal.executionOutput}</pre>
                       </div>
                     )}
 
                     {/* Inline approve result */}
                     {approveResult?.id === proposal.id && (
-                      <div className="mt-2 p-2.5 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                      <div className={cn('mt-2 p-2.5 rounded-lg border', approveResult.status === 'executed' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20')}>
                         <div className="flex justify-between items-center mb-1">
-                          <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Execution Output</span>
+                          <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">{approveResult.status === 'executed' ? 'Verified' : approveResult.status === 'approved' ? 'Approved for Manual Action' : approveResult.status === 'unverified' ? 'Investigate before retrying' : 'Action Failed'}</span>
                           <button onClick={() => setApproveResult(null)} className="text-slate-600 hover:text-slate-400">
                             <X size={10} />
                           </button>
                         </div>
-                        <pre className="text-[11px] text-emerald-300/80 font-mono whitespace-pre-wrap">{approveResult.output}</pre>
+                        <pre className="text-[11px] text-slate-300 font-mono whitespace-pre-wrap">{approveResult.output}</pre>
+                      </div>
+                    )}
+
+                    {dryRunResult?.id === proposal.id && (
+                      <div className="mt-2 p-2.5 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                        <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Preview · No Changes Applied</div>
+                        <div className="text-xs text-slate-300 mb-2">{dryRunResult.action}</div>
+                        {dryRunResult.sql && <pre className="text-[11px] text-cyan-300/80 font-mono whitespace-pre-wrap">{dryRunResult.sql}</pre>}
                       </div>
                     )}
 
@@ -327,6 +339,11 @@ export default function AutonomousPage() {
                     {/* Action buttons (pending only) */}
                     {isPending && (
                       <div className="flex items-center gap-2 mt-4 flex-wrap">
+                        <button onClick={() => handleDryRun(proposal.id)}
+                          disabled={!!approvingId}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30 transition-colors">
+                          {approvingId === proposal.id ? <Loader2 size={11} className="animate-spin" /> : <Eye size={11} />} Preview
+                        </button>
                         <button onClick={() => handleApprove(proposal.id)}
                           disabled={!!approvingId}
                           className={cn(
@@ -339,7 +356,8 @@ export default function AutonomousPage() {
                             ? <Loader2 size={11} className="animate-spin" />
                             : <CheckCircle size={11} />
                           }
-                          {proposal.risk === 'high' ? 'Approve (High Risk)' : 'Approve & Execute'}
+                          {permittedMaintenanceSql(proposal.engine, proposal.actionType, proposal.sql ?? '')
+                            ? 'Approve & Run' : 'Approve for Manual Action'}
                         </button>
 
                         <button onClick={() => handleDismiss(proposal.id)}
@@ -349,20 +367,6 @@ export default function AutonomousPage() {
                           Dismiss
                         </button>
 
-                        <div className="flex items-center gap-1.5 ml-auto">
-                          <span className="text-[10px] text-slate-500">Auto-execute:</span>
-                          <button onClick={() => handleToggleAuto(proposal)}
-                            disabled={togglingId === proposal.id || proposal.risk === 'high'}
-                            title={proposal.risk === 'high' ? 'High-risk actions cannot be auto-executed' : undefined}
-                            className="text-slate-500 hover:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                            {togglingId === proposal.id
-                              ? <Loader2 size={16} className="animate-spin" />
-                              : proposal.autoExecuteEnabled
-                                ? <ToggleRight size={16} className="text-blue-400" />
-                                : <ToggleLeft size={16} />
-                            }
-                          </button>
-                        </div>
                       </div>
                     )}
                   </div>

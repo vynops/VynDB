@@ -5,6 +5,7 @@ import useSWR from 'swr'
 import { Plus, Edit2, Trash2, Wifi, WifiOff, ChevronDown, X, Loader2, CheckCircle, XCircle, Database, Terminal, Play, ChevronRight } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
 import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
+import { isStatusStale } from '@/lib/status-freshness'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -33,7 +34,7 @@ const STATUS_BADGE: Record<string, string> = {
   connected: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
   warning:   'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
   error:     'bg-red-500/20 text-red-400 border border-red-500/30',
-  unknown:   'bg-slate-500/20 text-slate-400 border border-slate-500/20',
+  unknown:   'bg-amber-500/15 text-amber-300 border border-amber-500/40',
 }
 
 const ENV_BADGE: Record<string, string> = {
@@ -53,18 +54,6 @@ const EMPTY_FORM: DbForm = {
   username: '', password: '', ssl: false, environment: 'production', notes: '',
 }
 
-function HealthBar({ score }: { score: number }) {
-  const color = score >= 90 ? 'bg-emerald-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500'
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-20 bg-slate-700 rounded-full overflow-hidden">
-        <div className={cn('h-full rounded-full', color)} style={{ width: `${score}%` }} />
-      </div>
-      <span className="text-xs text-slate-400 font-bold">{score}</span>
-    </div>
-  )
-}
-
 function fmtSize(mb: number): string {
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)}GB`
   return `${Math.round(mb)}MB`
@@ -75,7 +64,7 @@ function fmtMs(ms: number): string {
 
 export default function DatabasesPage() {
   const refreshInterval = useAppRefreshInterval(30)
-  const { data: dbs, mutate } = useSWR('/api/databases', fetcher)
+  const { data: dbs, mutate } = useSWR('/api/databases', fetcher, { refreshInterval })
   const { data: perfList } = useSWR('/api/performance', fetcher, { refreshInterval })
   const { data: capList } = useSWR('/api/capacity', fetcher, { refreshInterval })
   const { data: replList } = useSWR('/api/replication', fetcher, { refreshInterval })
@@ -127,6 +116,7 @@ export default function DatabasesPage() {
       })
       const data = await res.json()
       setConsoleResult(data)
+      mutate()
       setConsoleHistory(h => [consoleSql, ...h.filter(q => q !== consoleSql)].slice(0, 20))
     } finally {
       setConsoleRunning(false)
@@ -213,8 +203,14 @@ export default function DatabasesPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const repl = replByDb[db.id] as any
           const showCache = ['postgresql', 'mysql', 'sqlserver'].includes(db.engine)
+          const stale = isStatusStale(db.lastChecked)
+          const status = stale ? 'unknown' : db.status
+          const statusHelp = stale ? 'No status check in 15 minutes. Connectivity is unverified; check the collector.'
+            : status === 'error' ? 'The most recent connection attempt failed. Check credentials, network, and the database service.'
+            : status === 'warning' ? 'The database responded, but monitoring reported degraded health.'
+            : 'The database responded at the last check; this is not a live connection test.'
           return (
-          <div key={db.id} className="rounded-2xl bg-[#0f1629] border border-slate-800 hover:border-slate-700 transition-colors p-5">
+          <div key={db.id} className={cn('rounded-2xl border transition-colors p-5', status === 'unknown' ? 'bg-[#141724] border-amber-500/35 hover:border-amber-400/55' : 'bg-[#0f1629] border-slate-800 hover:border-slate-700')}>
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2">
                 <div className={cn('w-9 h-9 rounded-xl border flex items-center justify-center text-[10px] font-black flex-shrink-0', ENGINE_COLOR[db.engine])}>
@@ -246,9 +242,9 @@ export default function DatabasesPage() {
             </div>
 
             <div className="flex items-center gap-2 mb-3">
-              <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded-full uppercase', STATUS_BADGE[db.status])}>{db.status}</span>
+              <span title={statusHelp} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full uppercase', STATUS_BADGE[status])}>{status === 'unknown' ? 'Status unknown' : status === 'error' ? 'Connection failed' : status}</span>
               <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded-full uppercase', ENV_BADGE[db.environment])}>{db.environment.slice(0,4)}</span>
-              {repl && repl.role === 'replica' && (
+              {status !== 'error' && status !== 'unknown' && repl && repl.role === 'replica' && (
                 <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded-full uppercase border',
                   repl.status === 'healthy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                   : repl.status === 'warning' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
@@ -256,28 +252,15 @@ export default function DatabasesPage() {
                   replica · {repl.lagSeconds}s lag
                 </span>
               )}
-              {repl && repl.role === 'primary' && repl.connectedReplicas > 0 && (
+              {status !== 'error' && status !== 'unknown' && repl && repl.role === 'primary' && repl.connectedReplicas > 0 && (
                 <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                   primary · {repl.connectedReplicas}r
                 </span>
               )}
             </div>
 
-            {/* Health bar */}
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[10px] text-slate-500">Health</span>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                    <div className={cn('h-full rounded-full', db.healthScore >= 90 ? 'bg-emerald-500' : db.healthScore >= 70 ? 'bg-yellow-500' : 'bg-red-500')} style={{ width: `${db.healthScore}%` }} />
-                  </div>
-                  <span className="text-xs font-bold text-slate-400">{db.healthScore}</span>
-                </div>
-              </div>
-            </div>
-
             {/* Live stats grid */}
-            {perf && (
+            {status !== 'error' && status !== 'unknown' && perf && (
               <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-2 border-t border-slate-800/60">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-slate-500">Connections</span>
@@ -306,7 +289,7 @@ export default function DatabasesPage() {
                     </span>
                   </div>
                 )}
-                {cap && (
+                {cap && status !== 'error' && status !== 'unknown' && (
                   <>
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] text-slate-500">Size</span>
@@ -324,7 +307,8 @@ export default function DatabasesPage() {
               </div>
             )}
 
-            <div className="text-[10px] text-slate-600 mt-2">Checked {timeAgo(db.lastChecked)}</div>
+            {(status === 'error' || status === 'unknown' || !perf) && <div className="text-[10px] text-slate-500 mt-2">{status === 'error' || status === 'unknown' ? 'Current resource metrics unavailable; historical values may still exist.' : 'No recent collector metrics available.'}</div>}
+            <div className={cn('text-[11px] mt-2 leading-relaxed', status === 'unknown' ? 'text-amber-200/80' : 'text-slate-500')} title={statusHelp}>Last check: {db.lastChecked ? timeAgo(db.lastChecked) : 'never'} · {statusHelp}</div>
             {db.notes && <div className="text-[10px] text-yellow-400/80 mt-1 truncate">{db.notes}</div>}
           </div>
           )

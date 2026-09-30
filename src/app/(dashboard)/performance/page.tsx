@@ -6,6 +6,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Activity, Cpu, HardDrive, Database } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
+import { isStatusStale } from '@/lib/status-freshness'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -28,7 +29,7 @@ function MetricCard({ label, value, unit, color, sub }: { label: string; value: 
 
 export default function PerformancePage() {
   const refreshInterval = useAppRefreshInterval(30)
-  const { data: dbs } = useSWR('/api/databases', fetcher)
+  const { data: dbs } = useSWR('/api/databases', fetcher, { refreshInterval })
   const dbList = Array.isArray(dbs) ? dbs : []
   const [selectedDb, setSelectedDb] = useState<string>('')
   const [range, setRange] = useState(24)
@@ -38,6 +39,9 @@ export default function PerformancePage() {
 
   const snapshots = Array.isArray(perfData) ? perfData : []
   const latest = snapshots[snapshots.length - 1]
+  const selectedStatus = dbList.find((db: { id: string }) => db.id === dbId) as { status: string; lastChecked: string } | undefined
+  const current = latest && selectedStatus && ['connected', 'warning'].includes(selectedStatus.status) &&
+    !isStatusStale(selectedStatus.lastChecked) && !isStatusStale(latest.timestamp)
 
   // Format time for chart labels
   const chartData = snapshots.map((s: { timestamp: string; tps: number; latencyP95Ms: number; latencyP99Ms: number; activeConnections: number; maxConnections: number; cpuPct: number; memPct: number; cacheHitRatio: number; diskReadMBps: number; diskWriteMBps: number }) => ({
@@ -68,8 +72,19 @@ export default function PerformancePage() {
         </div>
       </div>
 
+      {snapshots.length === 0 && (
+        <div className="border border-slate-700 bg-[#0f1629] p-4 text-sm text-slate-300">
+          No collected performance data for this period. Check database connection status and the collector; missing metrics do not mean zero activity.
+        </div>
+      )}
+      {latest && !current && (
+        <div className="border border-slate-700 bg-[#0f1629] p-4 text-sm text-slate-300">
+          Historical readings only. The latest sample or connection check is older than 15 minutes; current performance is unknown.
+        </div>
+      )}
+
       {/* Current stats */}
-      {latest && (
+      {current && (
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
           <MetricCard label="TPS" value={latest.tps} color="text-emerald-400" sub="transactions/sec" />
           <MetricCard label="Latency p50" value={latest.latencyP50Ms} unit="ms" color="text-blue-400" />
@@ -80,7 +95,7 @@ export default function PerformancePage() {
         </div>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      {snapshots.length > 0 && <div className="grid lg:grid-cols-2 gap-4">
 
         {/* TPS Chart */}
         <div className="rounded-2xl bg-[#0f1629] border border-slate-800 p-5">
@@ -170,7 +185,7 @@ export default function PerformancePage() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

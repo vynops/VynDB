@@ -20,6 +20,7 @@ import { sendSlack, sendTeams, sendWebhook, sendEmail } from './notifier'
 import { getSettings } from './settings-store'
 import { matchRouting } from './incident-store'
 import { appendAudit } from './audit-store'
+import { isStatusStale } from './status-freshness'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 
@@ -127,9 +128,11 @@ export async function runMonitor(): Promise<MonitorResult> {
   const t0 = Date.now()
   const settings = getSettings()
   const dbs = loadDatabases()
-  const snapshots = latestSnapshots()
-  const capacity = loadCapacity()
-  const replication = loadReplication()
+  const active = new Set(dbs.filter(db => db.status === 'connected' || db.status === 'warning').map(db => db.id))
+  const snapshots = new Map([...latestSnapshots()].filter(([id, snapshot]) => active.has(id) && !isStatusStale(snapshot.timestamp)))
+  const capacity = loadCapacity().filter(entry => active.has(entry.dbId) && entry.collectedAt && !isStatusStale(entry.collectedAt))
+  const replication = loadReplication().filter(entry => entry.collectedAt && !isStatusStale(entry.collectedAt) &&
+    [...active].some(id => entry.dbId === id || entry.dbId.startsWith(`${id}-`)))
   const slowQueries = loadSlowQueries()
 
   let thresholdBreaches = 0
@@ -148,12 +151,16 @@ export async function runMonitor(): Promise<MonitorResult> {
     const targetDbs = rule.dbId === '*' ? dbs : dbs.filter(d => d.id === rule.dbId)
 
     for (const db of targetDbs) {
+      if (!active.has(db.id)) continue
       const value = metricValue(metric, db.id, snapshots, capacity, replication, slowQueries)
       if (!evalOp(value, op, threshold)) continue
 
       thresholdBreaches++
       const now = new Date().toISOString()
-      const output = `Threshold breach on ${db.name}: ${metric} = ${value.toFixed(1)} ${op} ${threshold}`
+      const executableActions = rule.actions.filter(action => !['slack_notify', 'email_notify'].includes(action.type))
+      const status = executableActions.length > 0 ? 'skipped' : 'success'
+      const output = `Threshold breach on ${db.name}: ${metric} = ${value.toFixed(1)} ${op} ${threshold}` +
+        (executableActions.length > 0 ? `; database actions not executed: ${executableActions.map(action => action.type).join(', ')}` : '')
       const msgTemplate = rule.actions.find(a => a.type === 'slack_notify' || a.type === 'email_notify')?.message ?? rule.name
 
       const msg = msgTemplate
@@ -175,9 +182,9 @@ export async function runMonitor(): Promise<MonitorResult> {
       addRun({
         id: `run-${crypto.randomUUID().slice(0, 8)}`,
         ruleId: rule.id, startedAt: now, completedAt: now,
-        status: 'success', output, triggeredBy: 'threshold',
+        status, output, triggeredBy: 'threshold',
       })
-      saveRule({ ...rule, lastRunAt: now, lastRunStatus: 'success', lastRunOutput: output, runCount: rule.runCount + 1 })
+      saveRule({ ...rule, lastRunAt: now, lastRunStatus: status, lastRunOutput: output, runCount: rule.runCount + 1 })
     }
   }
 

@@ -22,8 +22,8 @@ function save<T>(file: string, data: T) {
 
 export type AutomationTrigger = 'cron' | 'threshold' | 'manual'
 export type AutomationActionType = 'vacuum' | 'analyze' | 'reindex' | 'kill_idle' | 'custom_sql' | 'slack_notify' | 'email_notify'
-export type RunStatus = 'success' | 'failed' | 'running' | 'skipped'
-export type AutonomousStatus = 'pending' | 'approved' | 'executed' | 'dismissed' | 'failed'
+export type RunStatus = 'success' | 'failed' | 'running' | 'skipped' | 'unverified'
+export type AutonomousStatus = 'pending' | 'approved' | 'executed' | 'dismissed' | 'failed' | 'unverified'
 export type AutonomousRisk = 'low' | 'medium' | 'high'
 export type AutonomousActionType = 'vacuum' | 'analyze' | 'reindex' | 'kill_query' | 'config_change' | 'index_create' | 'connection_limit' | 'custom'
 
@@ -273,7 +273,7 @@ const DEMO_PROPOSALS: AutonomousProposal[] = [
 
 // ────────── Automation Rules ──────────
 
-export function loadRules(): AutomationRule[] { return load('automation-rules.json', DEMO_RULES) }
+export function loadRules(): AutomationRule[] { return load('automation-rules.json', [] as AutomationRule[]) }
 export function saveRule(r: AutomationRule): void {
   const list = loadRules()
   const idx = list.findIndex(x => x.id === r.id)
@@ -286,37 +286,23 @@ export function deleteRule(id: string): void {
 
 // ────────── Run History ──────────
 
-export function loadRuns(): AutomationRun[] { return load('automation-runs.json', DEMO_RUNS) }
+export function loadRuns(): AutomationRun[] { return load('automation-runs.json', [] as AutomationRun[]) }
 export function addRun(run: AutomationRun): void {
   const list = loadRuns()
   list.unshift(run)
   save('automation-runs.json', list.slice(0, 500)) // cap at 500 entries
 }
 
-// Simulate running a rule — returns fake output based on action type
-export function simulateRun(rule: AutomationRule): { status: RunStatus; output: string } {
-  const now = new Date().toISOString()
-  const outputs: Record<AutomationActionType, string> = {
-    vacuum: `VACUUM ANALYZE on ${rule.dbName}\nTime: ${(Math.random() * 8 + 1).toFixed(1)}s | Tables scanned: ${Math.floor(Math.random() * 60 + 10)} | Dead tuples removed: ${(Math.random() * 200000 + 5000).toFixed(0)}`,
-    analyze: `ANALYZE on ${rule.dbName}\nStatistics updated for ${Math.floor(Math.random() * 50 + 5)} tables\nTime: ${(Math.random() * 3 + 0.5).toFixed(2)}s`,
-    reindex: `REINDEX completed on ${rule.dbName}\n${Math.floor(Math.random() * 20 + 3)} indexes rebuilt\nAvg fragmentation: 31% → ${Math.floor(Math.random() * 4 + 1)}%\nDuration: ${(Math.random() * 30 + 5).toFixed(1)}s`,
-    kill_idle: `Scanned connection pool on ${rule.dbName}\nIdle connections found: ${Math.floor(Math.random() * 8 + 1)}\nKilled: ${Math.floor(Math.random() * 5 + 1)} connections\nPool slots freed: ${Math.floor(Math.random() * 5 + 1)}`,
-    custom_sql: `Executed custom SQL on ${rule.dbName}\nRows affected: ${Math.floor(Math.random() * 1000)}\nExecution time: ${(Math.random() * 5 + 0.1).toFixed(2)}s`,
-    slack_notify: `Slack notification sent to #db-alerts\nMessage: ${rule.actions.find(a => a.type === 'slack_notify')?.message ?? 'Alert triggered'}`,
-    email_notify: `Email notification dispatched\nRecipients: ops-team@example.com\nSubject: [VynDB] ${rule.name}`,
-  }
-  const action = rule.actions[0]
-  const output = outputs[action.type] ?? `Rule executed: ${rule.name}`
-  return { status: 'success', output }
-}
-
 // ────────── Autonomous Proposals ──────────
 
-export function loadProposals(): AutonomousProposal[] { return load('autonomous-proposals.json', DEMO_PROPOSALS) }
+export function loadProposals(): AutonomousProposal[] {
+  return load('autonomous-proposals.json', [] as AutonomousProposal[]).map(proposal => ({ ...proposal, autoExecuteEnabled: false }))
+}
 export function saveProposal(p: AutonomousProposal): void {
   const list = loadProposals()
   const idx = list.findIndex(x => x.id === p.id)
-  if (idx === -1) { list.unshift(p) } else { list[idx] = p }
+  const proposal = { ...p, autoExecuteEnabled: false }
+  if (idx === -1) { list.unshift(proposal) } else { list[idx] = proposal }
   save('autonomous-proposals.json', list)
 }
 export function newProposalId(): string { return `auto-${crypto.randomUUID().slice(0, 8)}` }

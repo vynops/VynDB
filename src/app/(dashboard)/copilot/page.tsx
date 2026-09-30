@@ -158,8 +158,8 @@ export default function CopilotPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          dbContext: dbList.map((d: { name: string; engine: string; status: string; healthScore: number }) =>
-            `${d.name} (${d.engine}, ${d.status}, health: ${d.healthScore})`
+          dbContext: dbList.map((d: { name: string; engine: string; status: string }) =>
+            `${d.name} (${d.engine}, status: ${d.status})`
           ).join(', ')
         }),
       })

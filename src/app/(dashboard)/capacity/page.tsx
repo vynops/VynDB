@@ -19,6 +19,11 @@ export default function CapacityPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
+      {list.length === 0 && (
+        <div className="border border-slate-700 bg-[#0f1629] p-4 text-sm text-slate-300">
+          No current capacity readings. Check database connection status and the collector; a missing reading does not mean storage is healthy.
+        </div>
+      )}
 
       {/* DB Capacity Cards */}
       <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">

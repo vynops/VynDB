@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Activity, AlertTriangle, Database, Zap, Shield, HardDrive, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
 import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
+import { isStatusStale } from '@/lib/status-freshness'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -21,7 +22,7 @@ const STATUS_COLOR: Record<string, string> = {
   connected: 'bg-emerald-500/20 text-emerald-400',
   warning:   'bg-yellow-500/20 text-yellow-400',
   error:     'bg-red-500/20 text-red-400',
-  unknown:   'bg-slate-500/20 text-slate-400',
+  unknown:   'bg-amber-500/15 text-amber-300 border border-amber-500/40',
 }
 
 const SEV_COLOR: Record<string, string> = {
@@ -31,34 +32,22 @@ const SEV_COLOR: Record<string, string> = {
   low:      'text-blue-400',
 }
 
-function Stat({ label, value, sub, color = 'text-white', icon: Icon, href }: {
-  label: string; value: string | number; sub?: string; color?: string;
+function Stat({ label, value, sub, color = 'text-white', icon: Icon, href, emphasis }: {
+  label: string; value: string | number; sub?: string; color?: string; emphasis?: boolean;
   icon: React.ComponentType<{ className?: string }>; href?: string
 }) {
   const inner = (
-    <div className="rounded-2xl bg-[#0f1629] border border-slate-800 p-5 hover:border-slate-700 transition-colors">
+    <div className={cn('rounded-2xl border p-5 transition-colors', emphasis ? 'bg-amber-500/10 border-amber-500/40 hover:border-amber-400/60' : 'bg-[#0f1629] border-slate-800 hover:border-slate-700')}>
       <div className="flex items-start justify-between mb-3">
         <Icon className={cn('w-5 h-5', color)} />
       </div>
       <div className={cn('text-2xl font-black', color)}>{value}</div>
       <div className="text-xs text-slate-500 mt-0.5 font-medium">{label}</div>
-      {sub && <div className="text-xs text-slate-600 mt-1">{sub}</div>}
+      {sub && <div className={cn('text-xs mt-1', emphasis ? 'text-amber-200/80' : 'text-slate-600')}>{sub}</div>}
     </div>
   )
   if (href) return <Link href={href}>{inner}</Link>
   return inner
-}
-
-function HealthBar({ score }: { score: number }) {
-  const color = score >= 90 ? 'bg-emerald-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500'
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-        <div className={cn('h-full rounded-full', color)} style={{ width: `${score}%` }} />
-      </div>
-      <span className="text-xs font-bold text-slate-400 w-8 text-right">{score}</span>
-    </div>
-  )
 }
 
 export default function OverviewPage() {
@@ -68,17 +57,19 @@ export default function OverviewPage() {
   const { data: slowQ } = useSWR('/api/slow-queries', fetcher, { refreshInterval })
   const { data: backups } = useSWR('/api/backups', fetcher, { refreshInterval })
 
-  const dbList = Array.isArray(dbs) ? dbs : []
+  const dbList = (Array.isArray(dbs) ? dbs : []).map((db: { id: string; name: string; engine: string; environment: string; status: string; healthScore: number; version?: string; lastChecked: string }) =>
+    isStatusStale(db.lastChecked) ? { ...db, status: 'unknown' } : db)
   const incList = Array.isArray(incidents) ? incidents : []
   const sqList = Array.isArray(slowQ) ? slowQ : []
+  const slowToday = sqList.filter((query: { executedAt?: string }) => query.executedAt?.slice(0, 10) === new Date().toISOString().slice(0, 10)).length
   const bkList = Array.isArray(backups) ? backups : []
 
   const healthy = dbList.filter((d: { status: string }) => d.status === 'connected').length
   const warning = dbList.filter((d: { status: string }) => d.status === 'warning').length
+  const unknown = dbList.filter((d: { status: string }) => d.status === 'unknown').length
   const openInc = incList.filter((i: { status: string }) => i.status === 'open').length
   const critInc = incList.filter((i: { status: string; severity: string }) => i.status === 'open' && i.severity === 'critical').length
   const failedBk = bkList.filter((b: { status: string }) => b.status === 'failed').length
-  const avgHealth = dbList.length ? Math.round(dbList.reduce((s: number, d: { healthScore: number }) => s + d.healthScore, 0) / dbList.length) : 0
 
   const recentIncidents = incList
     .filter((i: { status: string }) => i.status !== 'resolved')
@@ -90,11 +81,11 @@ export default function OverviewPage() {
       {/* Stats grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Stat icon={Database} label="Total Databases" value={dbList.length} color="text-emerald-400" href="/databases" />
-        <Stat icon={CheckCircle} label="Healthy" value={healthy} color="text-emerald-400" href="/databases" />
+        <Stat icon={Activity} label="Status Unknown" value={unknown} sub={unknown ? 'No check in 15 min' : undefined} color={unknown ? 'text-amber-300' : 'text-slate-400'} emphasis={unknown > 0} href="/databases" />
+        <Stat icon={CheckCircle} label="Recently Connected" value={healthy} color="text-emerald-400" href="/databases" />
         <Stat icon={AlertTriangle} label="Warning" value={warning} color="text-yellow-400" href="/databases" />
-        <Stat icon={Activity} label="Avg Health Score" value={`${avgHealth}/100`} color={avgHealth >= 90 ? 'text-emerald-400' : avgHealth >= 70 ? 'text-yellow-400' : 'text-red-400'} />
         <Stat icon={XCircle} label="Open Incidents" value={openInc} sub={critInc > 0 ? `${critInc} critical` : undefined} color={openInc > 0 ? 'text-red-400' : 'text-slate-400'} href="/incidents" />
-        <Stat icon={Zap} label="Slow Queries Today" value={sqList.length} color="text-orange-400" href="/slow-queries" />
+        <Stat icon={Zap} label="Slow Queries Today (UTC)" value={slowToday} color="text-orange-400" href="/slow-queries" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
@@ -117,11 +108,11 @@ export default function OverviewPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-white truncate">{db.name}</span>
-                    <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase', STATUS_COLOR[db.status])}>{db.status}</span>
+                    <span title={db.status === 'unknown' ? 'Last status check is older than 15 minutes; connectivity is unknown.' : 'Status at the last check, not a live probe.'} className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase', STATUS_COLOR[db.status])}>{db.status === 'unknown' ? 'Status unknown' : db.status === 'error' ? 'Connection failed' : db.status}</span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <HealthBar score={db.healthScore} />
-                    <span className="text-[10px] text-slate-600 flex-shrink-0">{timeAgo(db.lastChecked)}</span>
+                    <span className="text-[10px] text-slate-500">{db.status === 'unknown' ? 'Current state unverified' : 'Status from last check'}</span>
+                    <span className="text-[10px] text-slate-600 flex-shrink-0">Checked {db.lastChecked ? timeAgo(db.lastChecked) : 'never'}</span>
                   </div>
                 </div>
                 <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', db.environment === 'production' ? 'bg-red-500/10 text-red-400' : 'bg-slate-700 text-slate-400')}>

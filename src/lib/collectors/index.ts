@@ -95,7 +95,7 @@ export async function runAllCollectors(): Promise<CollectResult> {
   if (newSchema.length > 0) saveJson('schema.json', newSchema)
 
   // Replication: replace entirely (current state)
-  if (newReplication.length > 0) saveJson('replication.json', newReplication)
+  if (newReplication.length > 0) saveJson('replication.json', newReplication.map(entry => ({ ...entry, collectedAt: new Date().toISOString() })))
 
   // Capacity: replace per DB, calculate growth from previous entry
   const existingCap = loadJson<CapacityEntry[]>('capacity.json', [])
@@ -118,7 +118,7 @@ export async function runAllCollectors(): Promise<CollectResult> {
       }
       // If no growth (idle DB) or spike filtered — leave at 0
     }
-    return { ...c, growthMBPerDay, daysUntilFull }
+    return { ...c, growthMBPerDay, daysUntilFull, collectedAt: new Date().toISOString() }
   })
 
   const capMap = new Map<string, CapacityEntry>()

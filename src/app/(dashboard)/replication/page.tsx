@@ -74,6 +74,9 @@ export default function ReplicationPage() {
           <p className="text-xs text-slate-500">{list.length} nodes monitored</p>
         </div>
         <div className="divide-y divide-slate-800/60">
+          {list.length === 0 && (
+            <div className="px-5 py-6 text-sm text-slate-400">No current replication readings. Check database status and the collector; this does not confirm replication health.</div>
+          )}
           {list.map((r) => (
             <div key={r.dbId} onClick={() => setSelected(r)}
               className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 cursor-pointer hover:bg-slate-800/30 transition-colors">

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth'
-import { loadDatabases } from '@/lib/db-store'
+import { loadDatabases, recordDatabaseConnectionFailure } from '@/lib/db-store'
 import { getPgPool, getMysqlPool, getMongoClient, getRedisClient, getMssqlPool } from '@/lib/db-connections'
 
 const MAX_ROWS = 500
 const TIMEOUT_MS = 30_000
+
+function isConnectionError(error: unknown): boolean {
+  const { code = '', name = '' } = error as { code?: string; name?: string }
+  return code.startsWith('08') || ['ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'PROTOCOL_CONNECTION_LOST'].includes(code)
+    || name === 'MongoNetworkError' || name === 'MongoServerSelectionError'
+}
 
 export async function POST(
   req: NextRequest,
@@ -29,7 +35,10 @@ export async function POST(
     switch (db.engine) {
       case 'postgresql': {
         const pool = await getPgPool(db)
-        if (!pool) return NextResponse.json({ error: 'Cannot connect to database' }, { status: 503 })
+        if (!pool) {
+          recordDatabaseConnectionFailure(db.id)
+          return NextResponse.json({ error: 'Cannot connect to database' }, { status: 503 })
+        }
         const result = await Promise.race([
           pool.query(sql),
           new Promise<never>((_, rej) => setTimeout(() => rej(new Error('Query timed out')), TIMEOUT_MS)),
@@ -46,7 +55,10 @@ export async function POST(
 
       case 'mysql': {
         const pool = await getMysqlPool(db)
-        if (!pool) return NextResponse.json({ error: 'Cannot connect to database' }, { status: 503 })
+        if (!pool) {
+          recordDatabaseConnectionFailure(db.id)
+          return NextResponse.json({ error: 'Cannot connect to database' }, { status: 503 })
+        }
         const [rawRows, fields] = await Promise.race([
           pool.execute(sql),
           new Promise<never>((_, rej) => setTimeout(() => rej(new Error('Query timed out')), TIMEOUT_MS)),
@@ -66,7 +78,10 @@ export async function POST(
 
       case 'mongodb': {
         const client = await getMongoClient(db)
-        if (!client) return NextResponse.json({ error: 'Cannot connect to database' }, { status: 503 })
+        if (!client) {
+          recordDatabaseConnectionFailure(db.id)
+          return NextResponse.json({ error: 'Cannot connect to database' }, { status: 503 })
+        }
 
         // Parse simple find/aggregate patterns or run as command
         let result: Record<string, unknown>[]
@@ -99,6 +114,10 @@ export async function POST(
             result = [res as Record<string, unknown>]
           }
         } catch (e) {
+          if (isConnectionError(e)) {
+            recordDatabaseConnectionFailure(db.id)
+            return NextResponse.json({ error: 'Database connection failed during query; check the database service and network' }, { status: 503 })
+          }
           return NextResponse.json({ error: `MongoDB query error: ${(e as Error).message}` }, { status: 400 })
         }
 
@@ -117,7 +136,10 @@ export async function POST(
 
       case 'redis': {
         const redis = await getRedisClient(db)
-        if (!redis) return NextResponse.json({ error: 'Cannot connect to database' }, { status: 503 })
+        if (!redis) {
+          recordDatabaseConnectionFailure(db.id)
+          return NextResponse.json({ error: 'Cannot connect to database' }, { status: 503 })
+        }
         const parts = sql.trim().split(/\s+/)
         const cmd = parts[0].toLowerCase()
         const args = parts.slice(1).map(a => a.replace(/^['"]|['"]$/g, ''))
@@ -136,7 +158,10 @@ export async function POST(
         // SQL Server
         if (db.engine === 'sqlserver') {
           const pool = await getMssqlPool(db)
-          if (!pool) return NextResponse.json({ error: 'Cannot connect to database' }, { status: 503 })
+          if (!pool) {
+            recordDatabaseConnectionFailure(db.id)
+            return NextResponse.json({ error: 'Cannot connect to database' }, { status: 503 })
+          }
           const result = await Promise.race([
             pool.request().query(sql),
             new Promise<never>((_, rej) => setTimeout(() => rej(new Error('Query timed out')), TIMEOUT_MS)),
@@ -156,6 +181,10 @@ export async function POST(
         return NextResponse.json({ error: `Engine '${db.engine}' query console not supported` }, { status: 400 })
     }
   } catch (e) {
+    if (isConnectionError(e)) {
+      recordDatabaseConnectionFailure(db.id)
+      return NextResponse.json({ error: 'Database connection failed during query; check the database service and network' }, { status: 503 })
+    }
     return NextResponse.json({ error: (e as Error).message }, { status: 400 })
   }
 }

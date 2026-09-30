@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth'
-import { generatePerformanceHistory, loadDatabases } from '@/lib/db-store'
+import { loadDatabases, STATUS_STALE_MS } from '@/lib/db-store'
 import fs from 'fs'
 import path from 'path'
 import type { PerformanceSnapshot } from '@/lib/db-store'
@@ -22,10 +22,12 @@ export async function GET(req: NextRequest) {
 
   if (!dbId) {
     const dbs = loadDatabases()
-    return NextResponse.json(dbs.map(d => {
-      const real = realSnaps.filter(s => s.dbId === d.id)
-      const snap = real.length > 0 ? real[0] : generatePerformanceHistory(d.id, 1).slice(-1)[0]
-      return { ...snap, dbId: d.id, name: d.name }
+    const cutoff = Date.now() - STATUS_STALE_MS
+    return NextResponse.json(dbs.flatMap(d => {
+      if (d.status !== 'connected' && d.status !== 'warning') return []
+      const latest = realSnaps.filter(s => s.dbId === d.id && Date.parse(s.timestamp) >= cutoff)
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]
+      return latest ? [{ ...latest, name: d.name, dataQuality: 'real', source: 'collector' }] : []
     }))
   }
 
@@ -34,7 +36,5 @@ export async function GET(req: NextRequest) {
   const filtered = realSnaps.filter(s => s.dbId === dbId && s.timestamp >= cutoff)
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
 
-  // Fall back to generated data if no real snapshots exist yet
-  if (filtered.length === 0) return NextResponse.json(generatePerformanceHistory(dbId, hours))
-  return NextResponse.json(filtered)
+  return NextResponse.json(filtered.map(snapshot => ({ ...snapshot, dataQuality: 'real', source: 'collector' })))
 }

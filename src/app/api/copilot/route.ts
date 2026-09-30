@@ -9,6 +9,10 @@ import fs from 'fs'
 import path from 'path'
 import type { PerformanceSnapshot, SecurityFinding } from '@/lib/db-store'
 import { getDatabaseCapabilities } from '@/lib/database-capabilities'
+import { isStatusStale } from '@/lib/status-freshness'
+
+const GROQ_DEFAULT_MODEL = 'openai/gpt-oss-120b'
+const RETIRED_GROQ_MODELS = new Set(['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'])
 
 function loadLatestSnapshots(): Map<string, PerformanceSnapshot> {
   const p = path.join(process.cwd(), 'data', 'perf-snapshots.json')
@@ -56,17 +60,20 @@ function buildRichContext(): string {
     }
   }
 
-  const lines: string[] = ['=== LIVE DATABASE METRICS ===']
+  const lines: string[] = ['=== DATABASE STATUS AND COLLECTED EVIDENCE ===']
 
   for (const db of dbs) {
-    const snap = snaps.get(db.id)
-    const capacity = cap.find(c => c.dbId === db.id)
-    const replication = repl.find(r => r.dbId === db.id)
+    const current = db.status === 'connected' || db.status === 'warning'
+    const candidate = snaps.get(db.id)
+    const snap = current && candidate && !isStatusStale(candidate.timestamp) ? candidate : undefined
+    const capacity = current ? cap.find(c => c.dbId === db.id && c.collectedAt && !isStatusStale(c.collectedAt)) : undefined
+    const replication = current ? repl.find(r => r.dbId === db.id && r.collectedAt && !isStatusStale(r.collectedAt)) : undefined
     const bk = lastBackup.get(db.id)
     const tables = schema.filter(s => s.dbId === db.id)
 
     const capabilities = getDatabaseCapabilities(db.engine)
-    lines.push(`\n[${db.name}] ${db.engine} ${db.version ?? ''} | env:${db.environment} | status:${db.status} | health:${db.healthScore}/100`)
+    lines.push(`\n[${db.name}] ${db.engine} ${db.version ?? ''} | env:${db.environment} | status:${db.status} | checked:${db.lastChecked || 'never'}`)
+    if (!current) lines.push('  current collector metrics unavailable; do not infer zero activity or health')
     lines.push(`  capabilities: ${capabilities.map(capability => `${capability.key}=${capability.state}`).join(', ')}`)
     if (db.notes) lines.push(`  notes: ${db.notes}`)
     if (snap) {
@@ -280,7 +287,10 @@ export async function POST(req: NextRequest) {
   const settings = getSettings()
   const provider = settings.aiProvider || 'groq'
   const apiKey = settings.aiApiKey || (provider === 'groq' ? settings.groqApiKey || process.env.GROQ_API_KEY : '')
-  const model = settings.aiModel || 'llama-3.3-70b-versatile'
+  const configuredModel = settings.aiModel?.trim()
+  const model = provider === 'groq' && (!configuredModel || RETIRED_GROQ_MODELS.has(configuredModel))
+    ? GROQ_DEFAULT_MODEL
+    : configuredModel || 'gpt-4o-mini'
 
   if (!apiKey) {
     return NextResponse.json(

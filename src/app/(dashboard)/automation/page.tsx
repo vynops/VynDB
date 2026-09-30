@@ -9,12 +9,13 @@ import {
 } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
 import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
+import { permittedMaintenanceSql } from '@/lib/maintenance-policy'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 type AutomationTrigger = 'cron' | 'threshold' | 'manual'
 type AutomationActionType = 'vacuum' | 'analyze' | 'reindex' | 'kill_idle' | 'custom_sql' | 'slack_notify' | 'email_notify'
-type RunStatus = 'success' | 'failed' | 'running' | 'skipped'
+type RunStatus = 'success' | 'failed' | 'running' | 'skipped' | 'unverified'
 
 interface AutomationAction { type: AutomationActionType; sql?: string; message?: string }
 interface AutomationRule {
@@ -68,7 +69,7 @@ const EMPTY_RULE = {
   name: '', description: '', dbId: '*', trigger: 'cron' as AutomationTrigger,
   cronExpr: '0 2 * * *', cronLabel: 'Daily at 02:00 UTC',
   thresholdMetric: 'slow_query_count', thresholdOperator: '>', thresholdValue: 10,
-  actions: [{ type: 'vacuum' as AutomationActionType, sql: '', message: '' }] as AutomationAction[],
+  actions: [{ type: 'analyze' as AutomationActionType, sql: '', message: '' }] as AutomationAction[],
   enabled: true, tags: [],
 }
 
@@ -79,6 +80,7 @@ function StatusBadge({ status }: { status?: RunStatus }) {
     failed:  { cls: 'text-red-400',     icon: XCircle,     label: 'Failed' },
     running: { cls: 'text-blue-400',    icon: Loader2,     label: 'Running' },
     skipped: { cls: 'text-slate-400',   icon: Clock,       label: 'Skipped' },
+    unverified: { cls: 'text-amber-400', icon: AlertTriangle, label: 'Needs investigation' },
   }[status]
   const Icon = cfg.icon
   return (
@@ -140,7 +142,7 @@ export default function AutomationPage() {
   const refreshInterval = useAppRefreshInterval(30)
   const { data: rules = [], mutate: mutateRules } = useSWR<AutomationRule[]>('/api/automation', fetcher)
   const { data: runs = [] } = useSWR<AutomationRun[]>('/api/automation/runs', fetcher, { refreshInterval })
-  const { data: dbs = [] } = useSWR<{ id: string; name: string }[]>('/api/databases', fetcher)
+  const { data: dbs = [] } = useSWR<{ id: string; name: string; engine: string }[]>('/api/databases', fetcher)
 
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ ...EMPTY_RULE })
@@ -200,9 +202,12 @@ export default function AutomationPage() {
     setConfirmRun(null)
     setRunningId(id)
     try {
-      const res = await fetch(`/api/automation/${id}/run`, { method: 'POST' })
+      const res = await fetch(`/api/automation/${id}/run`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: crypto.randomUUID() }),
+      })
       const data = await res.json()
-      setRunOutput({ id, output: data.output ?? 'Completed' })
+      setRunOutput({ id, output: data.output ?? data.error ?? 'Execution outcome unavailable' })
       mutateRules()
     } finally { setRunningId(null) }
   }
@@ -241,7 +246,7 @@ export default function AutomationPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-white">Automation Rules</h2>
-          <p className="text-sm text-slate-400 mt-0.5">Scheduled and threshold-triggered database maintenance tasks</p>
+          <p className="text-sm text-slate-400 mt-0.5">Rules, alerts, and manually approved maintenance</p>
         </div>
         <button onClick={() => { setForm({ ...EMPTY_RULE }); setShowModal(true) }}
           className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition-colors">
@@ -256,6 +261,9 @@ export default function AutomationPage() {
           const isExpanded = expandedId === rule.id
           const isRunning = runningId === rule.id
           const primaryAction = rule.actions[0]
+          const dbEngine = dbs.find(db => db.id === rule.dbId)?.engine ?? ''
+          const runnable = rule.actions.filter(action => !['slack_notify', 'email_notify'].includes(action.type))
+          const canExecute = runnable.length === 1 && !!permittedMaintenanceSql(dbEngine, runnable[0].type, runnable[0].sql ?? '')
 
           return (
             <div key={rule.id}
@@ -301,17 +309,14 @@ export default function AutomationPage() {
                     </span>
                     <StatusBadge status={rule.lastRunStatus} />
                     {rule.lastRunAt && <span className="text-[10px] text-slate-600">Last: {timeAgo(rule.lastRunAt)}</span>}
-                    {rule.nextRunAt && rule.trigger === 'cron' && (
-                      <span className="text-[10px] text-slate-600">Next: {timeAgo(rule.nextRunAt)}</span>
-                    )}
                     <span className="text-[10px] text-slate-600">{rule.runCount} runs</span>
                   </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <button onClick={() => setConfirmRun(rule)} disabled={isRunning || !rule.enabled}
-                    title="Run now"
+                  <button onClick={() => setConfirmRun(rule)} disabled={isRunning || !rule.enabled || !canExecute}
+                    title={canExecute ? 'Run now' : 'Manual execution is unavailable for this action'}
                     className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-400 disabled:opacity-40 transition-colors">
                     {isRunning ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
                   </button>
@@ -334,9 +339,9 @@ export default function AutomationPage() {
 
               {/* Run Output (inline) */}
               {runOutput?.id === rule.id && (
-                <div className="mx-4 mb-3 p-3 bg-slate-950/60 border border-emerald-500/20 rounded-lg">
+                <div className="mx-4 mb-3 p-3 bg-slate-950/60 border border-slate-700/40 rounded-lg">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Last Run Output</span>
+                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Last Run Output</span>
                     <button onClick={() => setRunOutput(null)} className="text-slate-600 hover:text-slate-400">
                       <X size={11} />
                     </button>
@@ -402,7 +407,7 @@ export default function AutomationPage() {
               ))}
               <div className="flex items-start gap-2 p-2.5 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
                 <AlertTriangle size={12} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-                <span className="text-yellow-300/80">This will execute immediately on the target database.</span>
+                <span className="text-yellow-300/80">Only the permitted named-table ANALYZE action will run. Confirm the target database before continuing.</span>
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setConfirmRun(null)}
@@ -549,11 +554,10 @@ export default function AutomationPage() {
                   ))}
                 </div>
 
-                {/* SQL field for custom_sql */}
-                {form.actions[0]?.type === 'custom_sql' && (
+                {(form.actions[0]?.type === 'custom_sql' || form.actions[0]?.type === 'analyze') && (
                   <textarea value={form.actions[0].sql ?? ''}
-                    onChange={e => setForm(f => ({ ...f, actions: [{ type: 'custom_sql', sql: e.target.value }] }))}
-                    placeholder="Enter SQL to execute..."
+                    onChange={e => setForm(f => ({ ...f, actions: [{ type: form.actions[0].type, sql: e.target.value }] }))}
+                    placeholder={form.actions[0].type === 'analyze' ? 'ANALYZE public.table_name; (PostgreSQL) or ANALYZE TABLE table_name; (MySQL)' : 'Manual SQL reference (not executed here)'}
                     rows={4}
                     className="settings-input w-full font-mono text-xs mt-2 resize-none" />
                 )}
