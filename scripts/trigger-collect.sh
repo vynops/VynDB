@@ -3,7 +3,13 @@
 #   1. Collect real metrics from all lab databases
 #   2. Run monitor — evaluate thresholds, detect anomalies, raise incidents
 #   3. Execute any backup schedules that are due (per-DB, per-schedule config)
-TOKEN="${VYNDB_COLLECTOR_TOKEN:-vyndb_collector_token_lab_2024}"
+APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$APP_DIR" || exit 1
+TOKEN="${VYNDB_COLLECTOR_TOKEN:-$(node -e 'require("@next/env").loadEnvConfig(process.cwd()); process.stdout.write(process.env.VYNDB_COLLECTOR_TOKEN || "")')}"
+if [ -z "$TOKEN" ]; then
+  echo "Collector token is not configured" >&2
+  exit 1
+fi
 BASE="http://localhost:3060"
 TS="[$(date '+%Y-%m-%d %H:%M:%S')]"
 
