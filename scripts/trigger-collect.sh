@@ -18,16 +18,12 @@ COLLECT_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/collect
   -H "Authorization: Bearer $TOKEN" --max-time 120)
 echo "$TS Collect: HTTP $COLLECT_CODE"
 
-# Step 2: Monitor (only if collection succeeded)
-if [ "$COLLECT_CODE" = "200" ]; then
-  MONITOR=$(curl -s -w "\n%{http_code}" -X POST "$BASE/api/monitor" \
-    -H "Authorization: Bearer $TOKEN" --max-time 60)
-  MONITOR_CODE=$(echo "$MONITOR" | tail -1)
-  MONITOR_BODY=$(echo "$MONITOR" | head -1)
-  echo "$TS Monitor: HTTP $MONITOR_CODE | $MONITOR_BODY"
-else
-  echo "$TS Monitor: skipped (collection failed)"
-fi
+# Step 2: Monitor
+MONITOR=$(curl -s -w "\n%{http_code}" -X POST "$BASE/api/monitor" \
+  -H "Authorization: Bearer $TOKEN" --max-time 60)
+MONITOR_CODE=$(echo "$MONITOR" | tail -1)
+MONITOR_BODY=$(echo "$MONITOR" | head -1)
+echo "$TS Monitor: HTTP $MONITOR_CODE | $MONITOR_BODY"
 
 # Step 3: Execute backup schedules that are due
 SCHED=$(curl -s -w "\n%{http_code}" -X POST "$BASE/api/backup-schedules/execute-due" \
@@ -35,3 +31,7 @@ SCHED=$(curl -s -w "\n%{http_code}" -X POST "$BASE/api/backup-schedules/execute-
 SCHED_CODE=$(echo "$SCHED" | tail -1)
 SCHED_BODY=$(echo "$SCHED" | head -1)
 echo "$TS Backup schedules: HTTP $SCHED_CODE | $SCHED_BODY"
+
+if [ "$COLLECT_CODE" != "200" ] || [ "$MONITOR_CODE" != "200" ] || [ "$SCHED_CODE" != "200" ]; then
+  exit 1
+fi

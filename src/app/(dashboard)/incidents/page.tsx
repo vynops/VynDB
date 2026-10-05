@@ -35,6 +35,7 @@ interface Incident {
   id: string; dbId: string; dbName: string; title: string;
   severity: string; category: string; status: string; source: string;
   createdAt: string; acknowledgedAt?: string; resolvedAt?: string;
+  reopenedAt?: string;
   assignedTo?: string; notes?: string; slaBreach?: boolean
 }
 
@@ -155,7 +156,7 @@ export default function IncidentsPage() {
       <div className="rounded-2xl bg-[#0f1629] border border-slate-800 overflow-hidden">
         <div className="divide-y divide-slate-800/60">
           {filtered.map(inc => {
-            const elapsed = elapsedMin(inc.createdAt)
+            const elapsed = elapsedMin(inc.reopenedAt ?? inc.createdAt)
             return (
               <div key={inc.id} className="flex items-start gap-3 p-4 hover:bg-slate-800/20 cursor-pointer transition-colors" onClick={() => { setSelected(inc); setNotes(inc.notes ?? ''); setAssignTo(inc.assignedTo ?? '') }}>
                 <AlertTriangle className={cn('w-4 h-4 flex-shrink-0 mt-0.5',

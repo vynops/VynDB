@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
+import { appendAudit } from './audit-store'
 
 const DATA = path.join(process.cwd(), 'data')
 const ensure = () => { if (!fs.existsSync(DATA)) fs.mkdirSync(DATA, { recursive: true }) }
@@ -35,10 +36,12 @@ export interface Incident {
   createdAt: string
   acknowledgedAt?: string
   resolvedAt?: string
+  reopenedAt?: string
   assignedTo?: string
   notes?: string
   slaBreach?: boolean
   fingerprint?: string
+  notificationEvents?: Array<{ key: string; status: Incident['status']; reopenedAt?: string }>
 }
 
 export function incidentFingerprint(data: Pick<Incident, 'dbId' | 'category' | 'title'>): string {
@@ -73,31 +76,50 @@ export function loadIncidents(): Incident[] {
   const f = path.join(DATA, 'incidents.json')
   ensure()
   if (!fs.existsSync(f)) {
-    fs.writeFileSync(f, JSON.stringify(DEMO_INCIDENTS, null, 2), 'utf8')
-    return DEMO_INCIDENTS
+    saveIncidents([])
+    return []
   }
-  try { return JSON.parse(fs.readFileSync(f, 'utf8')) as Incident[] } catch { return DEMO_INCIDENTS }
+  return JSON.parse(fs.readFileSync(f, 'utf8')) as Incident[]
 }
 
 export function saveIncidents(list: Incident[]): void { save('incidents.json', list) }
 
-export function addIncident(data: Omit<Incident, 'id' | 'createdAt'>): Incident {
+export function addIncident(data: Omit<Incident, 'id' | 'createdAt'>, actor = 'monitor'): Incident {
   const list = loadIncidents()
   const fingerprint = data.fingerprint ?? incidentFingerprint(data)
   const duplicate = data.source === 'auto' && list.find(item => item.status !== 'resolved' && (item.fingerprint === fingerprint || incidentFingerprint(item) === fingerprint))
   if (duplicate) return duplicate
-  const inc: Incident = { id: `inc-${crypto.randomUUID().slice(0, 8)}`, createdAt: new Date().toISOString(), fingerprint, ...data }
+  const inc: Incident = { ...data, id: `inc-${crypto.randomUUID().slice(0, 8)}`, createdAt: new Date().toISOString(), fingerprint }
   list.unshift(inc)
   saveIncidents(list)
+  appendAudit({ actor, action: 'incident.create', resource: 'incident', resourceId: inc.id, success: true, details: { source: inc.source, severity: inc.severity, category: inc.category } })
   return inc
 }
 
-export function patchIncident(id: string, patch: Partial<Incident>): Incident | null {
+export function patchIncident(id: string, patch: Partial<Incident>, actor = 'monitor'): Incident | null {
   const list = loadIncidents()
   const idx = list.findIndex(i => i.id === id)
   if (idx === -1) return null
-  list[idx] = { ...list[idx], ...patch }
+  const previous = list[idx]
+  const updated = { ...previous, ...patch, id: previous.id, createdAt: previous.createdAt }
+  if (patch.status === 'open') {
+    if (previous.status !== 'open') updated.reopenedAt = new Date().toISOString()
+    delete updated.acknowledgedAt
+    delete updated.resolvedAt
+    updated.slaBreach = false
+  } else if (patch.status === 'acknowledged') {
+    updated.acknowledgedAt = previous.acknowledgedAt ?? new Date().toISOString()
+    delete updated.resolvedAt
+  } else if (patch.status === 'resolved') {
+    updated.resolvedAt = previous.resolvedAt ?? new Date().toISOString()
+  }
+  if (patch.status && patch.status !== previous.status) {
+    const key = patch.status === 'open' ? 'initial' : `status:${updated.status}:${updated.acknowledgedAt ?? ''}:${updated.resolvedAt ?? ''}`
+    updated.notificationEvents = [...(previous.notificationEvents ?? []), { key, status: updated.status, reopenedAt: updated.reopenedAt }]
+  }
+  list[idx] = updated
   saveIncidents(list)
+  appendAudit({ actor, action: patch.slaBreach ? 'incident.sla_breach' : 'incident.update', resource: 'incident', resourceId: id, success: true, details: { fields: Object.keys(patch), previousStatus: previous.status, status: updated.status } })
   return list[idx]
 }
 
@@ -278,6 +300,7 @@ export function saveSla(s: SlaConfig): void { save('sla.json', s) }
 // ─────────────────────────────────────────
 export interface EscalationStep {
   delayMin: number
+  condition?: 'unacknowledged' | 'unresolved'
   notifyEmails: string[]
   notifySlack: boolean
   notifyTeams?: boolean
@@ -297,21 +320,29 @@ const DEFAULT_ESCALATIONS: EscalationPolicy[] = [
     id: 'critical',
     name: 'Critical — immediate page + escalation',
     steps: [
-      { delayMin: 0,  notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: '🔴 CRITICAL alert — immediate response required' },
-      { delayMin: 10, notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: '⚠️ Still unacknowledged after 10 minutes' },
-      { delayMin: 30, notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: false, message: '🚨 Unresolved for 30 minutes — management escalation' },
+      { delayMin: 0, condition: 'unacknowledged', notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: '🔴 CRITICAL alert — immediate response required' },
+      { delayMin: 10, condition: 'unacknowledged', notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: '⚠️ Still unacknowledged after 10 minutes' },
+      { delayMin: 30, condition: 'unresolved', notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: false, message: '🚨 Unresolved for 30 minutes — management escalation' },
     ],
   },
   {
     id: 'default',
     name: 'Standard — ack reminder + escalation',
     steps: [
-      { delayMin: 15, notifyEmails: [], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: 'Reminder: incident unacknowledged for 15 minutes' },
-      { delayMin: 60, notifyEmails: [], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: 'Escalation: incident unresolved for 1 hour' },
-      { delayMin: 240, notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: false, message: 'Critical escalation: unresolved for 4 hours' },
+      { delayMin: 15, condition: 'unacknowledged', notifyEmails: [], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: 'Reminder: incident unacknowledged for 15 minutes' },
+      { delayMin: 60, condition: 'unresolved', notifyEmails: [], notifySlack: true, notifyTeams: false, notifyOncall: true,  message: 'Escalation: incident unresolved for 1 hour' },
+      { delayMin: 240, condition: 'unresolved', notifyEmails: ['admin@vyndb.local'], notifySlack: true, notifyTeams: false, notifyOncall: false, message: 'Critical escalation: unresolved for 4 hours' },
     ],
   },
 ]
 
-export function loadEscalations(): EscalationPolicy[] { return load('escalations.json', DEFAULT_ESCALATIONS) }
+export function loadEscalations(): EscalationPolicy[] {
+  return load('escalations.json', DEFAULT_ESCALATIONS).map(policy => ({
+    ...policy,
+    steps: policy.steps.map(step => ({
+      ...step,
+      condition: step.condition ?? DEFAULT_ESCALATIONS.find(item => item.id === policy.id)?.steps.find(item => item.delayMin === step.delayMin)?.condition,
+    })),
+  }))
+}
 export function saveEscalations(e: EscalationPolicy[]): void { save('escalations.json', e) }

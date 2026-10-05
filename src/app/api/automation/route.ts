@@ -16,8 +16,14 @@ export async function POST(req: NextRequest) {
   if (typeof body.name !== 'string' || !body.name.trim() || !Array.isArray(body.actions) || body.actions.length === 0) {
     return NextResponse.json({ error: 'Rule name and at least one action are required' }, { status: 400 })
   }
-  if (!['cron', 'threshold', 'manual'].includes(body.trigger ?? 'cron')) {
+  if (!['cron', 'threshold', 'manual'].includes(body.trigger ?? 'manual')) {
     return NextResponse.json({ error: 'Invalid automation trigger' }, { status: 400 })
+  }
+  if (body.trigger === 'cron') {
+    return NextResponse.json({ error: 'Scheduled rules are not available; create a manual rule instead' }, { status: 400 })
+  }
+  if (body.trigger === 'threshold' && body.actions.some((action: { type?: string }) => !['slack_notify', 'email_notify'].includes(action.type ?? ''))) {
+    return NextResponse.json({ error: 'Threshold rules support notifications only' }, { status: 400 })
   }
   const rule = {
     id: `rule-${crypto.randomUUID().slice(0, 8)}`,
@@ -25,7 +31,7 @@ export async function POST(req: NextRequest) {
     description: body.description ?? '',
     dbId: body.dbId ?? '*',
     dbName: body.dbName ?? 'All databases',
-    trigger: body.trigger ?? 'cron',
+    trigger: body.trigger ?? 'manual',
     cronExpr: body.cronExpr,
     cronLabel: body.cronLabel,
     thresholdMetric: body.thresholdMetric,

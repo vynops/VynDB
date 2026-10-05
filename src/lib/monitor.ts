@@ -15,8 +15,8 @@ import {
   type PerformanceSnapshot, type CapacityEntry, type ReplicationStatus, type SlowQuery,
 } from './db-store'
 import { loadRules, saveRule, addRun, loadProposals, saveProposal, newProposalId, type AutonomousProposal } from './automation-store'
-import { loadIncidents, addIncident, patchIncident, loadEscalations, currentOnCallEmails } from './incident-store'
-import { sendSlack, sendTeams, sendWebhook, sendEmail } from './notifier'
+import { loadIncidents, addIncident, patchIncident, loadEscalations, loadSla } from './incident-store'
+import { sendSlack, sendTeams, sendWebhook, sendEmail, notifyIncident } from './notifier'
 import { getSettings } from './settings-store'
 import { matchRouting } from './incident-store'
 import { appendAudit } from './audit-store'
@@ -80,7 +80,7 @@ function metricValue(
       return Math.round(100 * snap.activeConnections / snap.maxConnections)
     }
     case 'slow_query_count': {
-      const cutoff = new Date(Date.now() - 10 * 60000).toISOString()
+      const cutoff = new Date(Date.now() - 5 * 60000).toISOString()
       const dbs = dbId === '*' ? slowQueries : slowQueries.filter(q => q.dbId === dbId)
       return dbs.filter(q => q.executedAt >= cutoff).length
     }
@@ -158,27 +158,29 @@ export async function runMonitor(): Promise<MonitorResult> {
       thresholdBreaches++
       const now = new Date().toISOString()
       const executableActions = rule.actions.filter(action => !['slack_notify', 'email_notify'].includes(action.type))
-      const status = executableActions.length > 0 ? 'skipped' : 'success'
-      const output = `Threshold breach on ${db.name}: ${metric} = ${value.toFixed(1)} ${op} ${threshold}` +
-        (executableActions.length > 0 ? `; database actions not executed: ${executableActions.map(action => action.type).join(', ')}` : '')
-      const msgTemplate = rule.actions.find(a => a.type === 'slack_notify' || a.type === 'email_notify')?.message ?? rule.name
-
-      const msg = msgTemplate
-        .replace('{{count}}', String(Math.round(value)))
-        .replace('{{metric}}', metric)
-        .replace('{{value}}', value.toFixed(1))
-        .replace('{{db}}', db.name)
-
-      // Execute all actions for this rule
+      const deliveries: string[] = []
+      const recipients = [...new Set([
+        ...matchRouting('high', 'performance').notifyEmails,
+        ...(settings.alertRecipients ?? '').split(',').map(email => email.trim()).filter(Boolean),
+      ])]
       for (const action of rule.actions) {
-        if (action.type === 'slack_notify' || action.type === 'email_notify') {
-          await dispatch(msg, `[VynDB Alert] ${rule.name}`).catch(() => {})
-        }
-        // kill_idle, vacuum, analyze, reindex, custom_sql are execution actions
-        // These are recorded as "pending execution" via the run log
+        if (action.type !== 'slack_notify' && action.type !== 'email_notify') continue
+        const msg = (action.message ?? rule.name)
+          .replaceAll('{{count}}', String(Math.round(value)))
+          .replaceAll('{{metric}}', metric)
+          .replaceAll('{{value}}', value.toFixed(1))
+          .replaceAll('{{db}}', db.name)
+        const result = action.type === 'slack_notify'
+          ? await sendSlack(msg).catch(() => 'failed' as const)
+          : await sendEmail(recipients, `[VynDB Alert] ${rule.name}`, msg).catch(() => 'failed' as const)
+        deliveries.push(`${action.type}: ${result}`)
       }
 
-      // Log the run
+      const status = deliveries.some(delivery => delivery.endsWith('failed')) ? 'failed'
+        : executableActions.length > 0 ? 'skipped'
+        : deliveries.some(delivery => delivery.endsWith('sent')) ? 'success' : 'skipped'
+      const output = `Threshold breach on ${db.name}: ${metric} = ${value.toFixed(1)} ${op} ${threshold}; ` +
+        [...deliveries, ...(executableActions.length > 0 ? [`database actions not executed: ${executableActions.map(action => action.type).join(', ')}`] : [])].join('; ')
       addRun({
         id: `run-${crypto.randomUUID().slice(0, 8)}`,
         ruleId: rule.id, startedAt: now, completedAt: now,
@@ -321,17 +323,20 @@ export async function runMonitor(): Promise<MonitorResult> {
 
     if (unanalyzed.length >= 3 && !pendingExists(dbId, 'analyze')) {
       const worst = [...unanalyzed].sort((a, b) => b.durationMs - a.durationMs)[0]
+      const table = worst.query.match(/FROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)/i)?.[1]
+      // A proposal without a specific table cannot pass the maintenance policy; keep it advisory rather than falsely actionable.
+      const sql = table
+        ? (db.engine === 'postgresql' ? `ANALYZE ${table.includes('.') ? table : `public.${table}`};` : `ANALYZE TABLE ${table.split('.').pop()};`)
+        : (db.engine === 'postgresql' ? 'ANALYZE;\n-- No specific table identified; manual review required' : 'ANALYZE TABLE table_name;\n-- No specific table identified; manual review required')
       addProposal({
         id: newProposalId(), source: 'slow_query',
         severity: unanalyzed.length >= 5 ? 'high' : 'medium',
-        title: `${unanalyzed.length} slow queries >=${settings.slowQueryThresholdMs}ms on ${db.name} — run ANALYZE`,
+        title: `${unanalyzed.length} slow queries >=${settings.slowQueryThresholdMs}ms on ${db.name} — run ANALYZE${table ? ` on ${table}` : ''}`,
         description: `${unanalyzed.length} queries exceed ${settings.slowQueryThresholdMs}ms avg. Worst: ${worst.durationMs}ms. Stale statistics may cause poor plan choices.`,
         dbId, dbName: db.name, engine: db.engine,
         actionType: 'analyze', risk: 'low',
-        proposedAction: 'ANALYZE; (refresh statistics for all tables)',
-        sql: db.engine === 'postgresql'
-          ? 'ANALYZE;\n-- Updates planner statistics for all tables'
-          : `ANALYZE TABLE ${worst.query.match(/FROM\s+(\w+)/i)?.[1] ?? 'table_name'};`,
+        proposedAction: table ? `ANALYZE ${table}; (refresh statistics for this table)` : 'Identify the affected table and refresh its statistics manually',
+        sql,
         confidence: 82, estimatedGain: '2-10x speedup on affected queries via better plan selection',
         status: 'pending', autoExecuteEnabled: false,
         createdAt: new Date().toISOString(),
@@ -364,13 +369,13 @@ export async function runMonitor(): Promise<MonitorResult> {
 
   const openIncidents = loadIncidents().filter(i => i.status !== 'resolved')
 
-  function incidentOpen(keyword: string): boolean {
-    return openIncidents.some(i => i.title.includes(keyword))
+  function incidentOpen(dbId: string, keyword: string): boolean {
+    return openIncidents.some(i => i.dbId === dbId && i.title.startsWith(keyword))
   }
 
   // DB unreachable
   for (const db of dbs) {
-    if (db.status === 'error' && !incidentOpen(db.name)) {
+    if (db.status === 'error' && !isStatusStale(db.lastChecked) && !incidentOpen(db.id, `DB unreachable: ${db.name}`)) {
       addIncident({
         dbId: db.id, dbName: db.name, source: 'auto',
         title: `DB unreachable: ${db.name}`,
@@ -378,17 +383,13 @@ export async function runMonitor(): Promise<MonitorResult> {
         notes: `Auto-raised by monitor. Last checked: ${db.lastChecked}`,
       })
       incidentsRaised++
-      await dispatch(
-        `🔴 *CRITICAL* — DB unreachable: *${db.name}* (${db.engine})\nLast seen: ${db.lastChecked}`,
-        `[VynDB CRITICAL] DB unreachable: ${db.name}`
-      ).catch(() => {})
     }
   }
 
   // Critical replication lag uses the configured alert threshold.
   for (const repl of replication) {
     if (repl.role !== 'replica' || repl.lagSeconds < settings.replicationLagAlertSec * 2) continue
-    if (!incidentOpen(`Replication lag critical: ${repl.dbName}`)) {
+    if (!incidentOpen(repl.dbId, `Replication lag critical: ${repl.dbName}`)) {
       addIncident({
         dbId: repl.dbId, dbName: repl.dbName, source: 'auto',
         title: `Replication lag critical: ${repl.dbName} (${repl.lagSeconds.toFixed(0)}s)`,
@@ -396,10 +397,6 @@ export async function runMonitor(): Promise<MonitorResult> {
         notes: `Auto-raised. Lag: ${repl.lagSeconds.toFixed(0)}s. Risk of data loss on failover.`,
       })
       incidentsRaised++
-      await dispatch(
-        `⚠️ *Replication lag critical* on ${repl.dbName}: ${repl.lagSeconds.toFixed(0)}s behind primary`,
-        `[VynDB] Replication lag critical: ${repl.dbName}`
-      ).catch(() => {})
     }
   }
 
@@ -409,7 +406,7 @@ export async function runMonitor(): Promise<MonitorResult> {
     if (!db || snap.maxConnections === 0) continue
     const connPct = Math.round(100 * snap.activeConnections / snap.maxConnections)
     const criticalPoolPct = Math.min(100, settings.connectionPoolPctAlert + 10)
-    if (connPct >= criticalPoolPct && !incidentOpen(`Connection pool critical: ${db.name}`)) {
+    if (connPct >= criticalPoolPct && !incidentOpen(dbId, `Connection pool critical: ${db.name}`)) {
       addIncident({
         dbId, dbName: db.name, source: 'auto',
         title: `Connection pool critical: ${db.name} (${connPct}%)`,
@@ -427,7 +424,7 @@ export async function runMonitor(): Promise<MonitorResult> {
     if (!db || cap.totalSizeMB === 0 || cap.freeSizeMB < 100) continue
     const diskTotalMB = cap.totalSizeMB + cap.freeSizeMB
     const diskPct = Math.round(100 * cap.totalSizeMB / diskTotalMB)
-    if (diskPct >= 90 && !incidentOpen(`Disk critical: ${cap.dbName}`)) {
+    if (diskPct >= 90 && !incidentOpen(cap.dbId, `Disk critical: ${cap.dbName}`)) {
       addIncident({
         dbId: cap.dbId, dbName: cap.dbName, source: 'auto',
         title: `Disk critical: ${cap.dbName} at ${diskPct}%`,
@@ -446,7 +443,7 @@ export async function runMonitor(): Promise<MonitorResult> {
       .sort((a, b) => (b.completedAt ?? b.startedAt ?? b.scheduledAt).localeCompare(a.completedAt ?? a.startedAt ?? a.scheduledAt))[0]
     const latestAt = latest?.completedAt ?? latest?.startedAt ?? latest?.scheduledAt
     const ageHours = latestAt ? (Date.now() - new Date(latestAt).getTime()) / 3_600_000 : Number.POSITIVE_INFINITY
-    if (ageHours > settings.backupRpoBreachAlertHrs && !incidentOpen(`Backup RPO breach: ${db.name}`)) {
+    if (ageHours > settings.backupRpoBreachAlertHrs && !incidentOpen(db.id, `Backup RPO breach: ${db.name}`)) {
       addIncident({
         dbId: db.id, dbName: db.name, source: 'auto',
         title: `Backup RPO breach: ${db.name}`,
@@ -458,35 +455,38 @@ export async function runMonitor(): Promise<MonitorResult> {
   }
 
   // Persist SLA breach state and deliver delayed escalation steps once per incident/step.
-  const sla = loadJson<Record<string, { ackMinutes: number; resolveMinutes: number }>>('sla.json', {})
+  const sla = loadSla()
   const escalationState = loadJson<Record<string, string>>('escalation-state.json', {})
   const escalationPolicies = loadEscalations()
+  for (const incident of loadIncidents()) {
+    for (const event of incident.notificationEvents ?? []) {
+      await notifyIncident({ ...incident, status: event.status, reopenedAt: event.reopenedAt }, matchRouting(incident.severity, incident.category), event.key)
+    }
+  }
   for (const incident of loadIncidents().filter(item => item.status !== 'resolved')) {
     const target = sla[incident.severity] ?? { ackMinutes: 30, resolveMinutes: 240 }
-    const ageMinutes = (Date.now() - new Date(incident.createdAt).getTime()) / 60_000
+    const ageMinutes = (Date.now() - new Date(incident.reopenedAt ?? incident.createdAt).getTime()) / 60_000
     const ackBreached = !incident.acknowledgedAt && ageMinutes > target.ackMinutes
     const resolveBreached = incident.status !== 'resolved' && ageMinutes > target.resolveMinutes
-    if (ackBreached || resolveBreached) patchIncident(incident.id, { slaBreach: true })
+    if ((ackBreached || resolveBreached) && !incident.slaBreach) patchIncident(incident.id, { slaBreach: true })
 
     const route = matchRouting(incident.severity, incident.category)
+    await notifyIncident(incident, route)
     const policy = escalationPolicies.find(item => item.id === (route?.escalationPolicyId ?? 'default'))
     if (!policy) continue
     for (let stepIndex = 0; stepIndex < policy.steps.length; stepIndex++) {
       const step = policy.steps[stepIndex]
-      if (step.delayMin <= 0 || ageMinutes < step.delayMin || (incident.acknowledgedAt && step.delayMin <= target.ackMinutes)) continue
-      const stateKey = `${incident.id}:${policy.id}:${stepIndex}`
+      const condition = step.condition ?? (step.delayMin <= target.ackMinutes ? 'unacknowledged' : 'unresolved')
+      if (step.delayMin < 0 || ageMinutes < step.delayMin || (incident.acknowledgedAt && condition === 'unacknowledged')) continue
+      const stateKey = `${incident.id}:${policy.id}:${stepIndex}${incident.reopenedAt ? `:${incident.reopenedAt}` : ''}`
       if (escalationState[stateKey]) continue
       const message = step.message ?? `Escalation: ${incident.title} remains ${incident.status}`
-      if (step.notifySlack) await sendSlack(`[VynDB ESCALATION] ${message}\nIncident: ${incident.title}\nDatabase: ${incident.dbName}`).catch(() => {})
-      if (step.notifyTeams) await sendTeams(`[VynDB ESCALATION] ${message}\nIncident: ${incident.title}\nDatabase: ${incident.dbName}`).catch(() => {})
-      if (step.notifyWebhook) await sendWebhook({ alert_type: 'escalation', incidentId: incident.id, title: incident.title, database: incident.dbName, message, step: stepIndex }).catch(() => {})
-      if (step.notifyOncall) {
-        const emails = currentOnCallEmails()
-        if (emails.length) await sendEmail(emails, `[VynDB ESCALATION] ${incident.title}`, message).catch(() => {})
+      const delivered = await notifyIncident(incident, { ...step, notifyTeams: !!step.notifyTeams, notifyWebhook: !!step.notifyWebhook }, `escalation:${policy.id}:${stepIndex}`, `[VynDB ESCALATION] ${message}\nIncident: ${incident.id}\nTitle: ${incident.title}\nDatabase: ${incident.dbName}`)
+      if (delivered) {
+        escalationState[stateKey] = new Date().toISOString()
+        saveJson('escalation-state.json', escalationState)
       }
-      if (step.notifyEmails.length) await sendEmail(step.notifyEmails, `[VynDB ESCALATION] ${incident.title}`, message).catch(() => {})
-      escalationState[stateKey] = new Date().toISOString()
-      appendAudit({ actor: 'monitor', action: 'incident.escalate', resource: 'incident', resourceId: incident.id, success: true, details: { policy: policy.id, step: stepIndex } })
+      appendAudit({ actor: 'monitor', action: 'incident.escalate', resource: 'incident', resourceId: incident.id, success: delivered, details: { policy: policy.id, step: stepIndex } })
     }
   }
   saveJson('escalation-state.json', escalationState)

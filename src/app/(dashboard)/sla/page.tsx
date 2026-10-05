@@ -28,17 +28,20 @@ export default function SlaPage() {
     const target = currentSla[sev] ?? { ackMinutes: 30, resolveMinutes: 240 }
     let ackBreaches = 0, resolveBreaches = 0, ackMet = 0, resolveMet = 0
 
-    sevIncidents.forEach((inc: { createdAt: string; acknowledgedAt?: string; resolvedAt?: string; status: string }) => {
-      const ageMin = (Date.now() - new Date(inc.createdAt).getTime()) / 60000
+    sevIncidents.forEach((inc: { createdAt: string; reopenedAt?: string; acknowledgedAt?: string; resolvedAt?: string; status: string }) => {
+      const startedAt = new Date(inc.reopenedAt ?? inc.createdAt).getTime()
+      const ageMin = ((inc.resolvedAt ? new Date(inc.resolvedAt).getTime() : Date.now()) - startedAt) / 60000
       if (inc.acknowledgedAt) {
-        const ackMin = (new Date(inc.acknowledgedAt).getTime() - new Date(inc.createdAt).getTime()) / 60000
+        const ackMin = (new Date(inc.acknowledgedAt).getTime() - startedAt) / 60000
         if (ackMin <= target.ackMinutes) { ackMet++ } else { ackBreaches++ }
       } else if (ageMin > target.ackMinutes) {
         ackBreaches++
       }
       if (inc.resolvedAt) {
-        const resolveMin = (new Date(inc.resolvedAt).getTime() - new Date(inc.createdAt).getTime()) / 60000
+        const resolveMin = (new Date(inc.resolvedAt).getTime() - startedAt) / 60000
         if (resolveMin <= target.resolveMinutes) { resolveMet++ } else { resolveBreaches++ }
+      } else if (inc.status !== 'resolved' && ageMin > target.resolveMinutes) {
+        resolveBreaches++
       }
     })
 

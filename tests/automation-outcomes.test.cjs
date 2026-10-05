@@ -298,3 +298,64 @@ test('auto-execute API cannot enable unattended execution', async () => {
   const result = await route.PATCH({})
   assert.equal(result.status, 410)
 })
+
+for (const [delivery, expected] of [['sent', 'success'], ['skipped', 'skipped'], ['failed', 'failed']]) {
+  test(`threshold alert persists ${expected} when Slack is ${delivery}`, async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vyndb-alert-'))
+    const data = path.join(directory, 'data')
+    fs.mkdirSync(data)
+    const history = [{ id: 'old-run', ruleId: 'rule-1', status: 'success', startedAt: '2026-07-01T00:00:00Z' }]
+    fs.writeFileSync(path.join(data, 'automation-runs.json'), JSON.stringify(history))
+    const store = loadTypeScript('src/lib/automation-store.ts', {}, directory)
+    store.saveRule({ id: 'rule-1', name: 'Alert', dbId: 'db-1', trigger: 'threshold', enabled: true,
+      thresholdMetric: 'slow_query_count', thresholdOperator: '>', thresholdValue: 0,
+      actions: [{ type: 'slack_notify', message: '{{db}}: {{count}}' }], runCount: 0 })
+    const sent = []
+    try {
+      const monitor = loadTypeScript('src/lib/monitor.ts', {
+        './db-store': {
+          loadDatabases: () => [{ id: 'db-1', name: 'sample', engine: 'postgresql', status: 'connected' }],
+          loadSlowQueries: () => [
+            { dbId: 'db-1', executedAt: new Date().toISOString() },
+            { dbId: 'db-1', executedAt: new Date(Date.now() - 6 * 60_000).toISOString() },
+          ], loadCapacity: () => [], loadReplication: () => [],
+        },
+        './automation-store': store,
+        './incident-store': { loadIncidents: () => [], addIncident: () => {}, patchIncident: () => {}, loadEscalations: () => [],
+          currentOnCallEmails: () => [], matchRouting: () => ({ notifyEmails: [] }) },
+        './notifier': { sendSlack: async message => { sent.push(message); return delivery },
+          sendTeams: async () => {}, sendWebhook: async () => {}, sendEmail: async () => 'skipped' },
+        './settings-store': { getSettings: () => ({ backupRpoBreachAlertHrs: Number.POSITIVE_INFINITY }) },
+        './audit-store': { appendAudit: () => {} },
+        './status-freshness': { isStatusStale: () => false },
+      }, directory)
+      await monitor.runMonitor()
+      assert.equal(sent.length, 1)
+      assert.equal(sent[0], 'sample: 1')
+      assert.equal(store.loadRuns().length, 2)
+      assert.equal(store.loadRuns()[0].status, expected)
+      assert.equal(store.loadRuns()[1].id, 'old-run')
+      assert.equal(store.loadRules()[0].lastRunStatus, expected)
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true })
+    }
+  })
+}
+
+test('new rules cannot claim an unsupported schedule or threshold database action', async () => {
+  class NextResponse {
+    static json(body, options) { return { body, status: options?.status ?? 200 } }
+  }
+  const saved = []
+  const route = loadTypeScript('src/app/api/automation/route.ts', {
+    'next/server': { NextResponse },
+    '@/lib/auth': { requireRole: async () => ({ email: 'editor@example.test' }) },
+    '@/lib/automation-store': { loadRules: () => [], saveRule: rule => saved.push(rule) },
+  })
+  const create = body => route.POST({ json: async () => ({ name: 'rule', actions: [{ type: 'slack_notify' }], ...body }) })
+  assert.equal((await create({ trigger: 'cron' })).status, 400)
+  assert.equal((await create({ trigger: 'threshold', actions: [{ type: 'custom_sql', sql: 'DROP TABLE x' }] })).status, 400)
+  assert.equal((await create({})).status, 201)
+  assert.equal(saved.length, 1)
+  assert.equal(saved[0].trigger, 'manual')
+})

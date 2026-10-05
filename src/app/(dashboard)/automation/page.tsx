@@ -66,7 +66,7 @@ const THRESHOLD_METRICS = [
 ]
 
 const EMPTY_RULE = {
-  name: '', description: '', dbId: '*', trigger: 'cron' as AutomationTrigger,
+  name: '', description: '', dbId: '*', trigger: 'manual' as AutomationTrigger,
   cronExpr: '0 2 * * *', cronLabel: 'Daily at 02:00 UTC',
   thresholdMetric: 'slow_query_count', thresholdOperator: '>', thresholdValue: 10,
   actions: [{ type: 'analyze' as AutomationActionType, sql: '', message: '' }] as AutomationAction[],
@@ -140,13 +140,14 @@ function RunHistoryPanel({ runs, ruleId }: { runs: AutomationRun[]; ruleId: stri
 
 export default function AutomationPage() {
   const refreshInterval = useAppRefreshInterval(30)
-  const { data: rules = [], mutate: mutateRules } = useSWR<AutomationRule[]>('/api/automation', fetcher)
+  const { data: rules = [], mutate: mutateRules } = useSWR<AutomationRule[]>('/api/automation', fetcher, { refreshInterval })
   const { data: runs = [] } = useSWR<AutomationRun[]>('/api/automation/runs', fetcher, { refreshInterval })
   const { data: dbs = [] } = useSWR<{ id: string; name: string; engine: string }[]>('/api/databases', fetcher)
 
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ ...EMPTY_RULE })
   const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
   const [runningId, setRunningId] = useState<string | null>(null)
   const [confirmRun, setConfirmRun] = useState<AutomationRule | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -157,21 +158,27 @@ export default function AutomationPage() {
 
   const stats = {
     total: rules.length,
-    enabled: rules.filter(r => r.enabled).length,
+    enabled: rules.filter(r => r.enabled && r.trigger === 'threshold' && r.actions.length > 0 && r.actions.every(action => action.type === 'slack_notify' || action.type === 'email_notify') && (r.dbId === '*' || dbs.some(db => db.id === r.dbId))).length,
     runsToday: runs.filter(r => new Date(r.startedAt).toDateString() === new Date().toDateString()).length,
     failed: runs.filter(r => r.status === 'failed' && new Date(r.startedAt) > new Date(Date.now() - 86400000)).length,
   }
 
   const handleSave = async () => {
     setSaving(true)
+    setFormError(null)
     try {
-      await fetch('/api/automation', {
+      const response = await fetch('/api/automation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
           dbName: dbs.find(d => d.id === form.dbId)?.name ?? (form.dbId === '*' ? 'All databases' : form.dbId),
         }),
       })
+      if (!response.ok) {
+        const result = await response.json()
+        setFormError(result.error ?? 'Could not create rule')
+        return
+      }
       mutateRules()
       setShowModal(false)
       setForm({ ...EMPTY_RULE })
@@ -231,7 +238,7 @@ export default function AutomationPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Total Rules', value: stats.total, color: 'text-white' },
-          { label: 'Enabled', value: stats.enabled, color: 'text-emerald-400' },
+          { label: 'Active alert rules', value: stats.enabled, color: 'text-emerald-400' },
           { label: 'Runs Today', value: stats.runsToday, color: 'text-blue-400' },
           { label: 'Failed (24h)', value: stats.failed, color: stats.failed > 0 ? 'text-red-400' : 'text-slate-400' },
         ].map(s => (
@@ -248,7 +255,7 @@ export default function AutomationPage() {
           <h2 className="text-lg font-bold text-white">Automation Rules</h2>
           <p className="text-sm text-slate-400 mt-0.5">Rules, alerts, and manually approved maintenance</p>
         </div>
-        <button onClick={() => { setForm({ ...EMPTY_RULE }); setShowModal(true) }}
+        <button onClick={() => { setForm({ ...EMPTY_RULE }); setFormError(null); setShowModal(true) }}
           className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition-colors">
           <Plus size={14} />
           New Rule
@@ -264,6 +271,12 @@ export default function AutomationPage() {
           const dbEngine = dbs.find(db => db.id === rule.dbId)?.engine ?? ''
           const runnable = rule.actions.filter(action => !['slack_notify', 'email_notify'].includes(action.type))
           const canExecute = runnable.length === 1 && !!permittedMaintenanceSql(dbEngine, runnable[0].type, runnable[0].sql ?? '')
+          const ruleState = !rule.enabled ? 'Disabled'
+            : rule.dbId !== '*' && !dbEngine ? 'Target missing'
+            : rule.trigger === 'cron' ? 'Schedule inactive'
+            : rule.trigger === 'threshold' && runnable.length > 0 ? 'Database action not supported'
+            : rule.trigger === 'threshold' ? 'Alert active' : 'Manual only'
+          const latestRun = runs.find(run => run.ruleId === rule.id)
 
           return (
             <div key={rule.id}
@@ -288,10 +301,11 @@ export default function AutomationPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-white text-sm">{rule.name}</span>
                     {primaryAction && (
-                      <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border', ACTION_COLORS[primaryAction.type])}>
-                        {ACTION_LABELS[primaryAction.type]}
+                      <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border', ACTION_COLORS[primaryAction.type] ?? 'text-slate-400 border-slate-700')}>
+                        {ACTION_LABELS[primaryAction.type] ?? primaryAction.type}
                       </span>
                     )}
+                    <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border', ruleState === 'Alert active' ? 'text-emerald-400 border-emerald-500/30' : 'text-amber-300 border-amber-500/30')}>{ruleState}</span>
                     {rule.trigger === 'cron' && (
                       <span className="flex items-center gap-1 text-[10px] text-slate-500">
                         <Clock size={10} />{rule.cronLabel}
@@ -307,9 +321,9 @@ export default function AutomationPage() {
                     <span className="flex items-center gap-1 text-[10px] text-slate-500">
                       <Database size={10} />{rule.dbName}
                     </span>
-                    <StatusBadge status={rule.lastRunStatus} />
-                    {rule.lastRunAt && <span className="text-[10px] text-slate-600">Last: {timeAgo(rule.lastRunAt)}</span>}
-                    <span className="text-[10px] text-slate-600">{rule.runCount} runs</span>
+                    {latestRun ? <StatusBadge status={latestRun.status} /> : rule.lastRunStatus && <span className="text-[10px] text-slate-500">Legacy result: {rule.lastRunStatus} (unverified)</span>}
+                    {latestRun && <span className="text-[10px] text-slate-600">Last recorded: {timeAgo(latestRun.startedAt)}</span>}
+                    <span className="text-[10px] text-slate-600">{runs.filter(run => run.ruleId === rule.id).length} retained runs</span>
                   </div>
                 </div>
 
@@ -475,12 +489,13 @@ export default function AutomationPage() {
                 <label className="block text-xs font-medium text-slate-400 mb-1.5">Trigger</label>
                 <div className="flex gap-2">
                   {(['cron', 'threshold', 'manual'] as AutomationTrigger[]).map(t => (
-                    <button key={t} onClick={() => setForm(f => ({ ...f, trigger: t }))}
+                    <button key={t} onClick={() => setForm(f => ({ ...f, trigger: t, actions: [{ type: t === 'threshold' ? 'slack_notify' : 'analyze' }] }))} disabled={t === 'cron'}
+                      title={t === 'cron' ? 'Scheduled rules are not available yet' : undefined}
                       className={cn('flex-1 py-2 rounded-lg text-xs font-medium capitalize border transition-colors',
                         form.trigger === t
                           ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                          : 'bg-slate-800/40 border-slate-700/40 text-slate-400 hover:text-white')}>
-                      {t === 'cron' ? 'Schedule' : t === 'threshold' ? 'Threshold' : 'Manual'}
+                          : 'bg-slate-800/40 border-slate-700/40 text-slate-400 hover:text-white', t === 'cron' && 'opacity-40 cursor-not-allowed')}>
+                      {t === 'cron' ? 'Schedule unavailable' : t === 'threshold' ? 'Threshold' : 'Manual'}
                     </button>
                   ))}
                 </div>
@@ -544,11 +559,13 @@ export default function AutomationPage() {
                 <label className="block text-xs font-medium text-slate-400 mb-1.5">Action</label>
                 <div className="grid grid-cols-2 gap-1.5">
                   {(Object.keys(ACTION_LABELS) as AutomationActionType[]).map(a => (
-                    <button key={a} onClick={() => setAction(a)}
+                    <button key={a} onClick={() => setAction(a)} disabled={form.trigger === 'threshold' && a !== 'slack_notify' && a !== 'email_notify'}
+                      title={form.trigger === 'threshold' && a !== 'slack_notify' && a !== 'email_notify' ? 'Threshold rules can send notifications only' : undefined}
                       className={cn('py-2 px-3 rounded-lg text-xs font-medium border text-left transition-colors',
                         form.actions[0]?.type === a
                           ? cn('border', ACTION_COLORS[a])
-                          : 'bg-slate-800/40 border-slate-700/40 text-slate-400 hover:text-white')}>
+                          : 'bg-slate-800/40 border-slate-700/40 text-slate-400 hover:text-white',
+                        form.trigger === 'threshold' && a !== 'slack_notify' && a !== 'email_notify' && 'opacity-40 cursor-not-allowed')}>
                       {ACTION_LABELS[a]}
                     </button>
                   ))}
@@ -572,6 +589,7 @@ export default function AutomationPage() {
               </div>
             </div>
 
+            {formError && <div role="alert" className="px-5 text-xs text-red-400">{formError}</div>}
             <div className="flex gap-2 p-5 border-t border-slate-800/60">
               <button onClick={() => setShowModal(false)}
                 className="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors">

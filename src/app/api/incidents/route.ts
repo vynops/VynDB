@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { loadIncidents, addIncident } from '@/lib/incident-store'
-import { sendSlack, sendTeams, sendWebhook, sendEmail } from '@/lib/notifier'
-import { matchRouting, currentOnCallEmails, findOpenIncidentDuplicate } from '@/lib/incident-store'
-import { getSettings } from '@/lib/settings-store'
-import { appendAudit } from '@/lib/audit-store'
+import { notifyIncident } from '@/lib/notifier'
+import { matchRouting, findOpenIncidentDuplicate } from '@/lib/incident-store'
 
 export async function GET(req: NextRequest) {
   const auth = await requireRole(req, 'viewer')
@@ -18,39 +16,28 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await requireRole(req, 'editor')
   if (auth instanceof NextResponse) return auth
-  const body = await req.json()
+  let body
+  try { body = await req.json() } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json({ error: 'Incident body must be an object' }, { status: 400 })
+  }
   if (typeof body.title !== 'string' || !body.title.trim() || !['critical', 'high', 'medium', 'low'].includes(body.severity) || !['performance', 'availability', 'replication', 'backup', 'security', 'capacity', 'other'].includes(body.category)) {
     return NextResponse.json({ error: 'Valid title, severity, and category are required' }, { status: 400 })
   }
-  const duplicate = findOpenIncidentDuplicate(body)
+  if (typeof body.dbId !== 'string' || typeof body.dbName !== 'string' || (body.source !== undefined && !['auto', 'manual'].includes(body.source))) {
+    return NextResponse.json({ error: 'Valid database and source are required' }, { status: 400 })
+  }
+  if (['notes', 'assignedTo'].some(field => body[field] !== undefined && typeof body[field] !== 'string')) {
+    return NextResponse.json({ error: 'Invalid incident field value' }, { status: 400 })
+  }
+  const data = { dbId: body.dbId, dbName: body.dbName, title: body.title.trim(), severity: body.severity, category: body.category, source: body.source ?? 'manual', status: 'open' as const, notes: body.notes, assignedTo: body.assignedTo }
+  const duplicate = findOpenIncidentDuplicate(data)
   if (duplicate) return NextResponse.json(duplicate, { status: 200, headers: { 'X-VynDB-Deduplicated': 'true' } })
-  const inc = addIncident(body)
-  appendAudit({ actor: auth.email, action: 'incident.create', resource: 'incident', resourceId: inc.id, success: true, details: { source: inc.source, severity: inc.severity, category: inc.category } })
-
-  // Fire notifications
+  const inc = addIncident(data, auth.email)
   const rule = matchRouting(inc.severity, inc.category)
-  const settings = getSettings()
-  const teamLine = settings.notificationTeam ? `\nTeam: ${settings.notificationTeam}` : ''
-  const msg = `[VynDB ${inc.severity.toUpperCase()}] ${inc.title}\nDatabase: ${inc.dbName}\nCategory: ${inc.category}${teamLine}\nTime: ${new Date().toISOString()}`
-
-  if (rule.notifySlack) sendSlack(msg).catch(() => {})
-  if (rule.notifyTeams) sendTeams(msg).catch(() => {})
-  if (rule.notifyWebhook) sendWebhook({
-    alert_type: 'incident',
-    title: inc.title,
-    severity: inc.severity,
-    database: inc.dbName,
-    category: inc.category,
-    team: settings.notificationTeam || undefined,
-    timestamp: new Date().toISOString(),
-    message: msg,
-  }).catch(() => {})
-
-  const emails: string[] = [...rule.notifyEmails]
-  if (rule.notifyOncall) emails.push(...currentOnCallEmails())
-  if (settings.alertRecipients) emails.push(...settings.alertRecipients.split(',').map(e => e.trim()).filter(Boolean))
-  const uniqueEmails = [...new Set(emails)]
-  if (uniqueEmails.length > 0) sendEmail(uniqueEmails, `[VynDB ${inc.severity.toUpperCase()}] ${inc.title}`, msg).catch(() => {})
+  await notifyIncident(inc, rule)
 
   return NextResponse.json(inc, { status: 201 })
 }
