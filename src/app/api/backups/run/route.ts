@@ -4,13 +4,13 @@ import { runBackup, runAllBackups } from '@/lib/backup-runner'
 import { loadDatabases } from '@/lib/db-store'
 import { getSettings } from '@/lib/settings-store'
 
-const COLLECTOR_TOKEN = process.env.VYNDB_COLLECTOR_TOKEN ?? 'vyndb_collector_token_lab_2024'
+const COLLECTOR_TOKEN = process.env.VYNDB_COLLECTOR_TOKEN ?? ''
 
 async function checkAuth(req: NextRequest): Promise<boolean> {
   // Accept collector token OR a logged-in editor/admin session
   const auth = req.headers.get('authorization') ?? ''
   const token = auth.replace('Bearer ', '').trim()
-  if (token === COLLECTOR_TOKEN) return true
+  if (COLLECTOR_TOKEN && token === COLLECTOR_TOKEN) return true
   const session = await getSessionFromRequest(req)
   return !!session && ['editor', 'admin'].includes(session.role)
 }

@@ -4,7 +4,7 @@
 
 ### AI-Powered Database Operations Platform
 
-**Self-hosted · Open Source · Enterprise Ready**
+**Self-hosted · Open Source · Operator-Reviewed Remediation**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=node.js&logoColor=white)](https://nodejs.org)
@@ -24,7 +24,13 @@
 
 ## Overview
 
-VynDB is a production-grade, self-hosted database operations platform that brings **monitoring, AI-assisted query tuning, security auditing, backup management, incident response, and autonomous remediation** across your entire database fleet — into a single intelligent dashboard.
+### Status and freshness
+
+Database status reflects the most recent connection check, not a continuous live connection. `Connected` means the last check succeeded; `Warning` means the database responded with degraded monitoring; `Connection failed` means a connection attempt failed. After 15 minutes without a check, the status becomes `Unknown` until collection resumes. A query-console connection failure updates its database status promptly, while a SQL syntax error does not indicate an outage.
+
+Fleet performance, replication, and capacity views show collected data only for recently checked databases. Missing readings are unavailable, not zero or healthy. Historical performance samples retain their timestamps. Check collector scheduling, credentials, network reachability and database logs when readings are missing or status is unknown.
+
+VynDB is a self-hosted database operations platform for **monitoring, AI-assisted query tuning, security auditing, backup management, incident response, and human-approved remediation** across your database fleet.
 
 Built on **Next.js 16 App Router** with a lightweight JSON file store and Groq-powered AI, VynDB collects real metrics every 5 minutes from your databases using native drivers — no agents, no sidecars, no vendor lock-in.
 
@@ -67,6 +73,7 @@ Built on **Next.js 16 App Router** with a lightweight JSON file store and Groq-p
 | <a href="screenshots/Screenshot%202026-09-01%20153200.png"><img src="screenshots/Screenshot%202026-09-01%20153200.png" alt="Settings - AI Pilot" width="100%" /></a> | <a href="screenshots/Screenshot%202026-09-01%20153232.png"><img src="screenshots/Screenshot%202026-09-01%20153232.png" alt="Settings - Notifications" width="100%" /></a> |
 
 ---
+
 ## Table of Contents
 
 - [Features](#features)
@@ -238,13 +245,13 @@ Full incident lifecycle from auto-raise to resolution.
 - **On-call schedule** — weekly rotation, time-zone aware
 
 ### 🤖 Automation Engine
-Rule-based automation with real SQL execution and full audit trail.
+Rules support monitoring and manual, verified maintenance execution.
 
-- **Trigger types:** cron (scheduled) or threshold (metric breach)
-- **Supported actions:** `run_sql`, `slack_notify`, `kill_query`, `vacuum`, `analyze`, `reindex`, `config_change`
+- **Triggers:** threshold notification rules are evaluated by the monitor; cron rule definitions are not scheduled for execution. Legacy rules with unsupported actions or missing targets are identified separately from active alerts.
+- **Executable action:** one schema-qualified `ANALYZE public.table_name;` on PostgreSQL or `ANALYZE TABLE table_name;` on MySQL, with explicit operator confirmation. Other SQL actions are advisory here; use the separate query console for manual SQL.
 - **Run confirmation modal** — shows rule name, target DB, action types, and SQL to execute before firing
-- **Real execution** on target database via connection pool
-- **Run history** — last 500 runs stored; click any run for full output
+- **Verified result:** PostgreSQL checks `pg_stat_all_tables.last_analyze`; MySQL requires an `OK` status response from `ANALYZE TABLE`. An uncertain result is marked `unverified`, not successful.
+- **Run history** — last 500 attempts are retained, including prior records; new threshold attempts distinguish sent, suppressed/unconfigured, and failed notification outcomes. A recorded success does not retroactively verify legacy runs.
 - **Enable/disable** per rule without deleting
 
 ### 🧬 Autonomous Proposals
@@ -252,10 +259,12 @@ AI-generated, human-approved remediation for detected issues.
 
 - **Auto-generated** from slow query spikes, replication lag, security findings, capacity alerts
 - Each proposal includes: severity, risk level (low/medium/high), confidence %, estimated gain, proposed action, SQL
-- **Approve → real execution** — runs actual SQL on the target database (e.g. `ANALYZE;`)
+- **Approve → verified execution** only for the supported table-specific `ANALYZE` actions; all other proposals remain advisory for manual action
 - **Advisory proposals** — for issues that require manual steps, explains what to do
-- **Auto-execute toggle** per proposal — enable for fully autonomous mode
+- **No unattended execution:** the auto-execute control is disabled; operator approval is required
 - **Dismiss** with audit record
+
+Execution receipts are kept under `data/execution-claims/`. A duplicate request or an interrupted/unverified attempt cannot be retried automatically. Inspect the claim, run history and database state before resolving an uncertain outcome. An admin can POST `{"confirmed":true,"note":"<what was inspected and observed>"}` to `/api/automation/<rule-id>/resolve` after that inspection; a still-running claim cannot be resolved in its first ten minutes. Resolution releases the rule lock but does not mark the action successful or permit reuse of the original request ID. Do not delete an active claim to force a retry.
 
 ---
 
@@ -319,7 +328,7 @@ AI-generated, human-approved remediation for detected issues.
 - npm 9+
 - PM2 (`npm install -g pm2`)
 - Docker + Docker Compose (for lab environment)
-- A Groq API key (free at [console.groq.com](https://console.groq.com)) for AI features
+- Optional: a Groq API key (free at [console.groq.com](https://console.groq.com)) for AI features
 
 ---
 
@@ -331,9 +340,10 @@ AI-generated, human-approved remediation for detected issues.
 git clone https://github.com/vynops/VynDB.git
 cd VynDB
 npm install
-cp .env.local.example .env.local   # edit and set VYNDB_SECRET, GROQ_API_KEY
 npm run dev
 ```
+
+`npm install` automatically creates `.env.local` with unique, cryptographically generated `VYNDB_SECRET` and `VYNDB_COLLECTOR_TOKEN` values. The file is ignored by Git and restricted to the current user on Unix systems; later installs and starts preserve configured values and replace known lab defaults. No manual secret setup is required. Add `GROQ_API_KEY` in Settings or `.env.local` only if you want AI features.
 
 App runs on **http://localhost:3060**
 
@@ -369,6 +379,8 @@ pm2 save
 pm2 list
 pm2 logs vyndb
 ```
+
+The install/build/start lifecycle and PM2 launcher create missing runtime secrets automatically. Keep `.env.local` backed up securely; do not commit it. AI features remain disabled until a provider API key is configured.
 
 The `ecosystem.config.js` starts two processes:
 - `vyndb` — the Next.js server (cluster mode, port 3060)
@@ -429,10 +441,10 @@ GROQ_API_KEY=gsk_...   # optional if set in app settings
 
 | User | Email | Password | Role |
 |---|---|---|---|
-| Admin | `admin@vyndb.local` | `changeme` | Full access |
-| Viewer | `viewer@vyndb.local` | `viewer123` | Read-only |
+| Admin | `admin@vyndb.local` | `changeme` | Full access; must change password at first login |
+| Viewer | `viewer@vyndb.local` | `viewer123` | Read-only; must change password at first login |
 
-> **Change these immediately in production** via Settings → Team.
+Both seeded accounts are restricted to the password-change screen until their initial password is changed. New passwords must be at least 12 characters.
 
 ### Role Permissions
 

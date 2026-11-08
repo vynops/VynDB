@@ -6,13 +6,14 @@ import { loadDatabases } from '@/lib/db-store'
 import { cleanupOldBackups } from '@/lib/backup-runner'
 import { getSettings } from '@/lib/settings-store'
 
-const COLLECTOR_TOKEN = process.env.VYNDB_COLLECTOR_TOKEN ?? 'vyndb_collector_token_lab_2024'
+const COLLECTOR_TOKEN = process.env.VYNDB_COLLECTOR_TOKEN ?? ''
 
 export async function POST(req: NextRequest) {
   const auth    = req.headers.get('authorization') ?? ''
   const token   = auth.replace('Bearer ', '').trim()
   const session = await getSessionFromRequest(req)
-  if (token !== COLLECTOR_TOKEN && (!session || !['editor', 'admin'].includes(session.role))) {
+  const collectorAuthorized = !!COLLECTOR_TOKEN && token === COLLECTOR_TOKEN
+  if (!collectorAuthorized && (!session || !['editor', 'admin'].includes(session.role))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

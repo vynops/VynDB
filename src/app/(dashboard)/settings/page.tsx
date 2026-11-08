@@ -197,9 +197,6 @@ export default function SettingsPage() {
   if (!form) return <div className="p-6 text-slate-500">Loading settings…</div>
 
   const currentProvider = AI_PROVIDERS.find(p => p.id === g('aiProvider')) || AI_PROVIDERS[0]
-  const availableModels = currentProvider.models.length > 0 ? currentProvider.models : [
-    { value: g('aiModel') as string, label: `${g('aiModel')} (custom)` },
-  ]
 
   return (
     <div className="p-4 sm:p-6">
@@ -265,19 +262,13 @@ export default function SettingsPage() {
               )}
             </div>
 
-            {/* Model selector */}
+            {/* Model ID */}
             <div>
               <label className="text-xs font-medium text-slate-400 block mb-1">AI Model</label>
-              {availableModels.length > 0 ? (
-                <select value={(g('aiModel') as string) ?? currentProvider.defaultModel} onChange={e => set('aiModel', e.target.value)} className="settings-input">
-                  {availableModels.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </select>
-              ) : (
-                <input type="text" value={(g('aiModel') as string) ?? ''} onChange={e => set('aiModel', e.target.value)}
-                  placeholder={currentProvider.defaultModel} className="settings-input font-mono text-xs" />
-              )}
+              <input type="text" value={(g('aiModel') as string) ?? ''} onChange={e => set('aiModel', e.target.value)}
+                placeholder={currentProvider.defaultModel} className="settings-input font-mono text-xs" />
               {currentProvider.id !== 'custom' && (
-                <p className="text-[10px] text-slate-500 mt-1">Select a model available in your {currentProvider.label} account.</p>
+                <p className="text-[10px] text-slate-500 mt-1">Enter a model ID available in your {currentProvider.label} account.</p>
               )}
             </div>
 

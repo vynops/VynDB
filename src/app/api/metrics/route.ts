@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { loadCapacity, loadDatabases, loadReplication, loadSecurity, loadSlowQueries } from '@/lib/db-store'
 import { STATUS_STALE_MS } from '@/lib/status-freshness'
 
-const TOKEN = process.env.VYNDB_METRICS_TOKEN ?? process.env.VYNDB_COLLECTOR_TOKEN ?? 'vyndb_collector_token_lab_2024'
+const TOKEN = process.env.VYNDB_METRICS_TOKEN || process.env.VYNDB_COLLECTOR_TOKEN || ''
 
 function label(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
@@ -23,7 +23,7 @@ function loadSnapshots(): Array<Record<string, unknown>> {
 
 export async function GET(req: NextRequest) {
   const provided = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
-  if (!provided || provided !== TOKEN) return new NextResponse('Unauthorized\n', { status: 401 })
+  if (!TOKEN || !provided || provided !== TOKEN) return new NextResponse('Unauthorized\n', { status: 401 })
 
   const dbs = loadDatabases()
   const snapshots = loadSnapshots()

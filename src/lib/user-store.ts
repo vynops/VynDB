@@ -12,6 +12,7 @@ export interface User {
   active: boolean
   passwordHash: string
   passwordSalt: string
+  mustChangePassword?: boolean
   createdAt: string
   lastLogin?: string
 }
@@ -27,8 +28,10 @@ function readUsers(): User[] {
   ensureDir()
   if (!fs.existsSync(USERS_FILE)) {
     // Seed default admin
-    const admin = buildUser({ email: 'admin@vyndb.local', name: 'Admin', role: 'admin', password: 'admin123' })
+    const admin = buildUser({ email: 'admin@vyndb.local', name: 'Admin', role: 'admin', password: process.env.VYNDB_ADMIN_PASSWORD || 'changeme' })
     const viewer = buildUser({ email: 'viewer@vyndb.local', name: 'Viewer', role: 'viewer', password: 'viewer123' })
+    admin.mustChangePassword = true
+    viewer.mustChangePassword = true
     const users = [admin, viewer]
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8')
     return users
@@ -92,7 +95,7 @@ export function createUser(data: { email: string; name: string; role: UserRole; 
   return user
 }
 
-export function updateUser(id: string, updates: Partial<Pick<User, 'name' | 'role' | 'active'> & { password?: string }>): User {
+export function updateUser(id: string, updates: Partial<Pick<User, 'name' | 'role' | 'active' | 'mustChangePassword'> & { password?: string }>): User {
   const users = readUsers()
   const idx = users.findIndex(u => u.id === id)
   if (idx === -1) throw new Error('User not found')
@@ -104,6 +107,7 @@ export function updateUser(id: string, updates: Partial<Pick<User, 'name' | 'rol
     users[idx].passwordHash = hash
     users[idx].passwordSalt = salt
   }
+  if (typeof updates.mustChangePassword === 'boolean') users[idx].mustChangePassword = updates.mustChangePassword
   writeUsers(users)
   return users[idx]
 }

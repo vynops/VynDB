@@ -9,8 +9,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
   }
   touchLastLogin(user.id)
-  const token = await createSession({ id: user.id, email: user.email, name: user.name, role: user.role })
-  const res = NextResponse.json({ ok: true })
+  const mustChangePassword = user.mustChangePassword === true
+  const token = await createSession({ id: user.id, email: user.email, name: user.name, role: user.role, mustChangePassword })
+  const res = NextResponse.json({ ok: true, mustChangePassword })
   res.cookies.set(sessionCookieName(), token, {
     httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 7 * 86400, path: '/',
   })

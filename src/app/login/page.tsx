@@ -22,11 +22,11 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
-      const data = await res.json() as { ok?: boolean; error?: string }
+      const data = await res.json() as { ok?: boolean; error?: string; mustChangePassword?: boolean }
       if (!res.ok) {
         setError(data.error ?? 'Login failed')
       } else {
-        router.push('/overview')
+        router.push(data.mustChangePassword ? '/change-password' : '/overview')
         router.refresh()
       }
     } catch {
@@ -91,7 +91,7 @@ export default function LoginPage() {
 
 			<div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3 text-xs text-slate-500 space-y-1.5">
           <p className="font-semibold text-slate-400">First-time setup</p>
-          <p>Set <span className="font-mono text-slate-400">VYNDB_ADMIN_EMAIL</span> and <span className="font-mono text-slate-400">VYNDB_ADMIN_PASSWORD</span> in <span className="font-mono text-slate-400">.env.local</span> — the admin account is created automatically on first boot.</p>
+          <p>Fresh installs sign in as <span className="font-mono text-slate-400">admin@vyndb.local</span> with password <span className="font-mono text-slate-400">changeme</span>. You must set a new password before using the dashboard.</p>
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-4">

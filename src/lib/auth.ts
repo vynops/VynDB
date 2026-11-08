@@ -8,6 +8,7 @@ export interface SessionPayload {
   email: string
   name: string
   role: 'admin' | 'editor' | 'viewer'
+  mustChangePassword?: boolean
   iat?: number
   exp?: number
 }
@@ -15,9 +16,11 @@ export interface SessionPayload {
 const ROLE_ORDER: Record<string, number> = { viewer: 0, editor: 1, admin: 2 }
 
 function getSecret(): Uint8Array {
-  return new TextEncoder().encode(
-    process.env.VYNDB_SECRET ?? 'vyndb-fallback-dev-secret-change-in-prod'
-  )
+  const secret = process.env.VYNDB_SECRET
+  if (!secret || new TextEncoder().encode(secret).length < 32) {
+    throw new Error('VYNDB_SECRET must be configured with at least 32 bytes')
+  }
+  return new TextEncoder().encode(secret)
 }
 
 export function sessionCookieName(): string {
@@ -25,7 +28,7 @@ export function sessionCookieName(): string {
 }
 
 export async function createSession(
-  payload: Pick<SessionPayload, 'id' | 'email' | 'name' | 'role'>
+  payload: Pick<SessionPayload, 'id' | 'email' | 'name' | 'role' | 'mustChangePassword'>
 ): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
@@ -50,7 +53,7 @@ export async function getSession(): Promise<SessionPayload | null> {
   const session = await verifySession(token)
   if (!session) return null
   const user = findUserById(session.id)
-  return user?.active ? session : null
+  return user?.active ? { ...session, mustChangePassword: user.mustChangePassword === true } : null
 }
 
 export async function getSessionFromRequest(
@@ -61,7 +64,7 @@ export async function getSessionFromRequest(
   const session = await verifySession(token)
   if (!session) return null
   const user = findUserById(session.id)
-  return user?.active ? session : null
+  return user?.active ? { ...session, mustChangePassword: user.mustChangePassword === true } : null
 }
 
 export function hasRole(
@@ -78,6 +81,9 @@ export async function requireRole(
   const session = await getSessionFromRequest(req)
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (session.mustChangePassword) {
+    return NextResponse.json({ error: 'Password change required' }, { status: 403 })
   }
   if (!hasRole(session, minimum)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

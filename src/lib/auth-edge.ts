@@ -2,18 +2,20 @@ import { jwtVerify } from 'jose'
 import { NextRequest } from 'next/server'
 
 function getSecret(): Uint8Array {
-  return new TextEncoder().encode(
-    process.env.VYNDB_SECRET ?? 'vyndb-fallback-dev-secret-change-in-prod'
-  )
+  const secret = process.env.VYNDB_SECRET
+  if (!secret || new TextEncoder().encode(secret).length < 32) {
+    throw new Error('VYNDB_SECRET must be configured with at least 32 bytes')
+  }
+  return new TextEncoder().encode(secret)
 }
 
-export async function hasValidSession(req: NextRequest): Promise<boolean> {
+export async function getSessionState(req: NextRequest): Promise<{ mustChangePassword: boolean } | null> {
   const token = req.cookies.get('vyndb_session')?.value
-  if (!token) return false
+  if (!token) return null
   try {
-    await jwtVerify(token, getSecret())
-    return true
+    const { payload } = await jwtVerify(token, getSecret())
+    return { mustChangePassword: payload.mustChangePassword === true }
   } catch {
-    return false
+    return null
   }
 }

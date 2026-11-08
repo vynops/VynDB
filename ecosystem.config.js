@@ -3,8 +3,8 @@ module.exports = {
     // ── VynDB Next.js app ──────────────────────────────────
     {
       name: 'vyndb',
-      script: 'node_modules/.bin/next',
-      args: 'start -p 3060',
+      script: 'scripts/start-app.sh',
+      interpreter: '/bin/bash',
       cwd: '/home/vyndb/vyndb',
       instances: 1,
       autorestart: true,

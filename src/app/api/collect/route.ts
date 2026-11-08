@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runAllCollectors } from '@/lib/collectors'
 
-const COLLECTOR_TOKEN = process.env.VYNDB_COLLECTOR_TOKEN ?? 'vyndb_collector_token_lab_2024'
+const COLLECTOR_TOKEN = process.env.VYNDB_COLLECTOR_TOKEN ?? ''
 
 export async function POST(req: NextRequest) {
   // Accept token via Authorization header or query param
@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const queryToken = new URL(req.url).searchParams.get('token') ?? ''
   const provided = auth.replace('Bearer ', '').trim() || queryToken
 
-  if (provided !== COLLECTOR_TOKEN) {
+  if (!COLLECTOR_TOKEN || provided !== COLLECTOR_TOKEN) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization') ?? ''
   const provided = auth.replace('Bearer ', '').trim()
-  if (provided !== COLLECTOR_TOKEN) {
+  if (!COLLECTOR_TOKEN || provided !== COLLECTOR_TOKEN) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return NextResponse.json({ ok: true, message: 'Collector ready. POST to trigger.' })

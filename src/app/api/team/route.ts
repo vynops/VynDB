@@ -5,7 +5,7 @@ import { listUsers, createUser } from '@/lib/user-store'
 export async function GET(req: NextRequest) {
   const auth = await requireRole(req, 'admin')
   if (auth instanceof NextResponse) return auth
-  const users = listUsers().map(u => ({ id: u.id, email: u.email, name: u.name, role: u.role, lastLogin: u.lastLogin, createdAt: u.createdAt }))
+  const users = listUsers().map(u => ({ id: u.id, email: u.email, name: u.name, role: u.role, active: u.active, lastLogin: u.lastLogin, createdAt: u.createdAt }))
   return NextResponse.json(users)
 }
 
@@ -17,5 +17,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'email, name, role and password are required' }, { status: 400 })
   }
   const u = createUser({ email, name, role, password })
-  return NextResponse.json({ id: u.id, email: u.email, name: u.name, role: u.role }, { status: 201 })
+  return NextResponse.json({ id: u.id, email: u.email, name: u.name, role: u.role, active: u.active }, { status: 201 })
 }
