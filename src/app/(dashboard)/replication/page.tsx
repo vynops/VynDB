@@ -22,7 +22,7 @@ const STATUS_COLOR: Record<string, string> = {
   critical: 'text-red-400',
 }
 
-type ReplNode = { dbId: string; dbName: string; engine: string; role: string; lagSeconds: number; lagBytes?: number; syncState?: string; connectedReplicas?: number; lastSyncAt: string; status: string }
+type ReplNode = { dbId: string; parentDbId?: string; dbName: string; engine: string; role: string; lagSeconds?: number; lagLabel?: string; changesRemaining?: number; lagBytes?: number; syncState?: string; connectedReplicas?: number; lastSyncAt: string; status: string }
 
 function CopyBtn({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -91,15 +91,15 @@ export default function ReplicationPage() {
                   <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                     {r.syncState && <span className="text-[10px] text-slate-400">State: <span className="text-blue-400">{r.syncState}</span></span>}
                     {r.connectedReplicas !== undefined && <span className="text-[10px] text-slate-400">{r.connectedReplicas} replica(s)</span>}
-                    <span className="text-[10px] text-slate-500">Synced {timeAgo(r.lastSyncAt)}</span>
+                    <span className="text-[10px] text-slate-500">{r.engine === 'couchbase' ? 'Observed' : 'Synced'} {timeAgo(r.lastSyncAt)}</span>
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-4 sm:flex-shrink-0">
                 <div className="text-right">
-                  <div className="text-xs text-slate-500">Lag</div>
+                  <div className="text-xs text-slate-500">{r.engine === 'couchbase' ? 'XDCR backlog' : 'Lag'}</div>
                   <div className={cn('text-sm font-black', STATUS_COLOR[r.status])}>
-                    {r.role === 'primary' ? '—' : r.lagSeconds < 1 ? `${Math.round(r.lagSeconds * 1000)}ms` : `${r.lagSeconds.toFixed(1)}s`}
+                    {r.role === 'primary' ? '—' : r.lagLabel ?? (typeof r.lagSeconds === 'number' ? r.lagSeconds < 1 ? `${Math.round(r.lagSeconds * 1000)}ms` : `${r.lagSeconds.toFixed(1)}s` : '—')}
                   </div>
                 </div>
                 {r.lagBytes !== undefined && (
@@ -143,9 +143,9 @@ export default function ReplicationPage() {
       {/* Detail Modal */}
       {selected && (() => {
         const r = selected
-        const lagPct = r.role === 'primary' ? 0 : Math.min(100, (r.lagSeconds / 60) * 100)
+        const lagPct = r.role === 'primary' || typeof r.lagSeconds !== 'number' ? 0 : Math.min(100, (r.lagSeconds / 60) * 100)
         const lagColor = r.status === 'healthy' ? 'bg-emerald-500' : r.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
-        const lagLabel = r.role === 'primary' ? '—' : r.lagSeconds < 1 ? `${Math.round(r.lagSeconds * 1000)}ms` : `${r.lagSeconds.toFixed(2)}s`
+        const lagLabel = r.role === 'primary' ? '—' : r.lagLabel ?? (typeof r.lagSeconds === 'number' ? r.lagSeconds < 1 ? `${Math.round(r.lagSeconds * 1000)}ms` : `${r.lagSeconds.toFixed(2)}s` : '—')
         const sqlCommands: Record<string, { label: string; sql: string }[]> = {
           postgresql: r.role === 'primary' ? [
             { label: 'Replication slots', sql: "SELECT slot_name, active, pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS lag FROM pg_replication_slots;" },
@@ -179,19 +179,26 @@ export default function ReplicationPage() {
                 <button onClick={() => setSelected(null)}><X size={14} className="text-slate-400 hover:text-white" /></button>
               </div>
               <div className="p-5 space-y-4 text-xs">
-                {/* Lag meter */}
-                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-slate-400 font-medium">Replication Lag</span>
-                    <span className={cn('font-black text-sm', STATUS_COLOR[r.status])}>{lagLabel}</span>
+                {r.engine === 'couchbase' ? (
+                  <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                    <div className="text-slate-400 font-medium mb-1">XDCR task state</div>
+                    <div className={cn('font-black text-sm capitalize', STATUS_COLOR[r.status])}>{r.syncState ?? r.status}</div>
+                    <div className="text-xs text-slate-500 mt-1">Changes remaining: {r.changesRemaining?.toLocaleString() ?? 'unavailable'}</div>
                   </div>
-                  <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                    <div className={cn('h-full rounded-full transition-all', lagColor)} style={{ width: `${Math.max(lagPct, r.role === 'primary' ? 0 : 2)}%` }} />
+                ) : (
+                  <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                    <div className="flex justify-between mb-2">
+                      <span className="text-slate-400 font-medium">Replication Lag</span>
+                      <span className={cn('font-black text-sm', STATUS_COLOR[r.status])}>{lagLabel}</span>
+                    </div>
+                    <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                      <div className={cn('h-full rounded-full transition-all', lagColor)} style={{ width: `${Math.max(lagPct, r.role === 'primary' ? 0 : 2)}%` }} />
+                    </div>
+                    <div className="flex justify-between mt-1 text-[10px] text-slate-600">
+                      <span>0s (ideal)</span><span>30s (warn)</span><span>60s+ (critical)</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between mt-1 text-[10px] text-slate-600">
-                    <span>0s (ideal)</span><span>30s (warn)</span><span>60s+ (critical)</span>
-                  </div>
-                </div>
+                )}
 
                 {/* Stats grid */}
                 <div className="grid grid-cols-2 gap-3">

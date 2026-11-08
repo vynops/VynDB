@@ -32,7 +32,7 @@ Fleet performance, replication, and capacity views show collected data only for 
 
 VynDB is a self-hosted database operations platform for **monitoring, AI-assisted query tuning, security auditing, backup management, incident response, and human-approved remediation** across your database fleet.
 
-Built on **Next.js 16 App Router** with a lightweight JSON file store and Groq-powered AI, VynDB collects real metrics every 5 minutes from your databases using native drivers — no agents, no sidecars, no vendor lock-in.
+Built on **Next.js 16 App Router** with a lightweight JSON file store and Groq-powered AI, VynDB collects real metrics every 5 minutes from your databases using native drivers and management APIs — no agents, no sidecars, no vendor lock-in.
 
 > **Design philosophy:** VynDB does not replace your DBA team. It makes every engineer as capable as your best DBA.
 
@@ -106,7 +106,7 @@ Monitor all your database instances from a single pane of glass with real-time h
 - **Replica role badges** — primary/replica/standby with lag shown inline
 - **Multi-environment support** — dev, staging, production side by side with colour-coded environment badges
 - **Test connection** on demand — verify credentials before saving
-- **Query console** per database — run SQL, MongoDB queries, and Redis commands directly from the browser, with history
+- **Query console** per database — run SQL/SQL++, MongoDB queries, and Redis commands directly from the browser, with history
 
 ### 📈 Performance Monitoring
 Deep per-database performance charts with configurable time windows.
@@ -119,7 +119,7 @@ Deep per-database performance charts with configurable time windows.
 ### ⚡ Slow Query Tracking & AI Analysis
 Automatic capture and AI-assisted resolution of slow queries across all engines.
 
-- **Auto-capture** from `pg_stat_statements`, MySQL `performance_schema.events_statements_summary_by_digest`, SQL Server `sys.dm_exec_query_stats`, MongoDB `system.profile`, Redis SLOWLOG
+- **Auto-capture** from `pg_stat_statements`, MySQL `performance_schema.events_statements_summary_by_digest`, SQL Server `sys.dm_exec_query_stats`, MongoDB `system.profile`, Redis SLOWLOG, and Couchbase Query Service completed requests (with required privileges/logging)
 - **Configurable threshold** — flag queries above N milliseconds (default 1000ms)
 - **One-click AI analysis** per query — bottleneck identification, index suggestions, rewrite strategies, estimated gain, confidence score
 - **Query history** — deduplicates by query fingerprint, retains top 200
@@ -163,7 +163,7 @@ Paste any SQL/NoSQL query for instant AI-powered analysis.
 - Ready-to-copy `CREATE INDEX` statements
 - Query rewrite suggestions
 - Confidence scoring (0–100%)
-- Per-engine support: PostgreSQL, MySQL, SQL Server, MongoDB, Redis, CouchBase
+- Per-engine support: PostgreSQL, MySQL, SQL Server, MongoDB, Redis, Couchbase
 - Query retained per engine when switching — switching back restores your work
 
 ### 📐 Schema Explorer
@@ -182,6 +182,7 @@ Real-time health tracking for all replicated databases.
 - **PostgreSQL:** streaming replication lag in seconds and bytes, sync state, WAL sender status, connected replica count
 - **MySQL:** primary/replica lag monitoring
 - **SQL Server:** Always On AG support (when replicas are configured)
+- **Couchbase:** XDCR task state and changes remaining; this is a backlog count, not time-based lag
 - Click-to-expand detail panel with lag meter, exact timestamps, and quick-check diagnostic SQL (copy button)
 - Auto-raises incidents when lag exceeds the configured threshold
 
@@ -194,6 +195,7 @@ Track database growth and predict storage exhaustion.
   - MongoDB: `dbStats` — `dataSize`, `indexSize`, filesystem free
   - SQL Server: `sys.database_files`
   - Redis: `maxmemory` vs `used_memory`
+  - Couchbase: cluster storage totals and bucket data/disk sizes
 - Top 5 tables by size per database
 - Growth rate calculated from consecutive collector runs (5-min interval)
 - **"Days until full"** — real calculation when growth data exists; shows "stable" for idle databases
@@ -221,6 +223,7 @@ Full lifecycle backup management with real execution.
   - MongoDB: `mongodump --archive --gzip`
   - Redis: `BGSAVE` → copy `dump.rdb`
   - SQL Server: `BACKUP DATABASE TO DISK` → `docker cp`
+- **Couchbase:** full-cluster backups through `cbbackupmgr` (install the CLI on the VynDB host); backup verification, retention, and deletion also use the CLI. Schema-only/data-only and restore actions are not supported.
 - **Scheduled backups** — cron-based with configurable retention (default 7 days)
 - **RPO/RTO tracking** per job
 - **Backup detail modal** — file path, size, duration, exact timestamps
@@ -277,7 +280,9 @@ Execution receipts are kept under `data/execution-claims/`. A duplicate request 
 | **MongoDB** | 7+ | `mongodb` | ✅ Full | ✅ `db.collection.find()` | ✅ mongodump |
 | **Redis** | 7+ | `ioredis` | ✅ Full | ✅ Raw commands | ✅ BGSAVE |
 | **SQL Server** | 2019+ | `mssql` | ✅ Full | ✅ | ✅ BACKUP TO DISK |
-| **CouchBase** | 7+ | _(planned)_ | 🔜 | 🔜 | 🔜 |
+| **Couchbase** | 7+ | Management + Query REST APIs | ⚠️ Partial | ✅ SQL++ (Query Service) | ✅ Full-cluster (`cbbackupmgr` required) |
+
+Couchbase collection includes reachability, management-API probe latency, node CPU/memory, connections, operations, bucket capacity, collection/schema metadata, permission-gated completed slow requests, and XDCR task status. XDCR backlog is reported as changes remaining, not seconds of lag. Host disk I/O, cache hit, max connections, p95/p99 latency, exact row counts, and per-collection sizes are unavailable; schema and overall performance support therefore remain partial. Query execution requires Query Service access. Slow-query collection requires access to completed-request logging.
 
 ---
 
@@ -292,7 +297,7 @@ Execution receipts are kept under `data/execution-claims/`. A duplicate request 
               ┌────────────┴────────────┐
               │      Collector          │  PM2 cron · every 5 min
               │  pg · mysql · mongo     │
-              │  redis · mssql          │
+              │  redis · mssql · couchbase │
               └────────────┬────────────┘
                            │ writes
               ┌────────────▼────────────┐
@@ -317,8 +322,8 @@ Execution receipts are kept under `data/execution-claims/`. A duplicate request 
 
 **Key design decisions:**
 - **No external database** — JSON file store keeps the deployment footprint zero. A time-series DB (InfluxDB, TimescaleDB) can be swapped in for longer retention.
-- **PM2 cluster mode** — the app itself; the collector runs as a separate PM2 fork process on a 5-minute cron.
-- **Native drivers** — direct connection to each engine, no proxy layer.
+- **PM2-managed app process** — the collector runs as a separate PM2 fork process on a 5-minute cron.
+- **Native drivers and management APIs** — direct connections without a proxy layer; Couchbase uses its HTTP management API.
 
 ---
 
@@ -329,6 +334,7 @@ Execution receipts are kept under `data/execution-claims/`. A duplicate request 
 - PM2 (`npm install -g pm2`)
 - Docker + Docker Compose (for lab environment)
 - Optional: a Groq API key (free at [console.groq.com](https://console.groq.com)) for AI features
+- Optional: Couchbase Server 7+; install Couchbase's `cbbackupmgr` CLI on the VynDB host to enable Couchbase backups
 
 ---
 
@@ -383,7 +389,7 @@ pm2 logs vyndb
 The install/build/start lifecycle and PM2 launcher create missing runtime secrets automatically. Keep `.env.local` backed up securely; do not commit it. AI features remain disabled until a provider API key is configured.
 
 The `ecosystem.config.js` starts two processes:
-- `vyndb` — the Next.js server (cluster mode, port 3060)
+- `vyndb` — the Next.js server (single PM2-managed process, port 3060)
 - `vyndb-collector` — metric collector (fork mode, cron `*/5 * * * *`)
 
 ### nginx Reverse Proxy (optional)
@@ -442,9 +448,8 @@ GROQ_API_KEY=gsk_...   # optional if set in app settings
 | User | Email | Password | Role |
 |---|---|---|---|
 | Admin | `admin@vyndb.local` | `changeme` | Full access; must change password at first login |
-| Viewer | `viewer@vyndb.local` | `viewer123` | Read-only; must change password at first login |
 
-Both seeded accounts are restricted to the password-change screen until their initial password is changed. New passwords must be at least 12 characters.
+The read-only viewer account is also seeded. Seeded accounts are restricted to the password-change screen until their initial password is changed. New passwords must be at least 12 characters. Set `VYNDB_ADMIN_PASSWORD` before first boot to choose a different initial admin password.
 
 ### Role Permissions
 
@@ -487,10 +492,12 @@ VynDB/
 │   │   │   ├── team/               # User management
 │   │   │   └── settings/           # App configuration
 │   │   ├── api/                    # Next.js API routes
+│   │   ├── change-password/        # Required initial password change
 │   │   └── login/                  # Auth page
 │   ├── lib/
 │   │   ├── collectors/
 │   │   │   ├── index.ts            # Collector orchestrator
+│   │   │   ├── couchbase-collector.ts # Couchbase management API collector
 │   │   │   ├── pg-collector.ts     # PostgreSQL collector
 │   │   │   ├── mysql-collector.ts  # MySQL collector
 │   │   │   ├── mongo-collector.ts  # MongoDB collector
@@ -533,6 +540,7 @@ All endpoints require a valid session cookie (login at `/login`) or Bearer token
 | Method | Path | Description |
 |---|---|---|
 | POST | `/api/auth/login` | Login with email/password |
+| POST | `/api/auth/change-password` | Change the current user's password; required for seeded accounts on first login |
 | POST | `/api/auth/logout` | Logout |
 | GET | `/api/auth/me` | Current user info |
 
@@ -596,7 +604,7 @@ All endpoints require a valid session cookie (login at `/login`) or Bearer token
 | Charts | Recharts 2 | Area + line charts |
 | Data fetching | SWR | Auto-refresh, cache invalidation |
 | Icons | Lucide React | Consistent icon set |
-| DB drivers | pg, mysql2, mongodb, ioredis, mssql | Native, no ORMs |
+| DB integrations | pg, mysql2, mongodb, ioredis, mssql, Couchbase REST APIs | Native drivers and management APIs |
 | AI | Groq SDK | Llama 3.3 70B Versatile |
 | Auth | jose (JWT) | PBKDF2 password hashing |
 | Email | Nodemailer | SMTP with TLS |
@@ -654,7 +662,7 @@ This is normal if your lab database host has real low disk space. The monitor on
 5. Open a Pull Request
 
 **Areas where contributions are especially welcome:**
-- CouchBase collector (`src/lib/collectors/couchbase-collector.ts`)
+- Improve Couchbase schema completeness, per-collection size metrics, and XDCR lag measurements
 - Oracle collector (requires Oracle Instant Client)
 - Time-series storage backend (replace JSON with InfluxDB/TimescaleDB)
 - EXPLAIN plan visualisation

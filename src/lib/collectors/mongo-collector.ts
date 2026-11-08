@@ -108,9 +108,12 @@ export async function collectMongo(dbs: DbConnection[], out: {
         indexSizeMB: indexMB, freeSizeMB: diskFreeMB,
         growthMBPerDay: 0, daysUntilFull: 0,   // calculated in index.ts
         indexBloatPct: 5, tableBloatPct: 3,
-        topTables: out.schema.filter(s => s.dbId === db.id).slice(0, 5).map(s => ({
-          name: s.name, sizeMB: s.sizeMB, growthMBPerDay: 0,
-        })),
+        topTables: out.schema
+          .filter(s => s.dbId === db.id)
+          .flatMap(s => s.sizeMB === undefined ? [] : [{
+            name: s.name, sizeMB: s.sizeMB, growthMBPerDay: 0,
+          }])
+          .slice(0, 5),
       })
 
       saveDatabase({ ...db, status: 'connected', healthScore: 90, lastChecked: new Date().toISOString() })

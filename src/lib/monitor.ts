@@ -73,10 +73,10 @@ function metricValue(
   const snap = dbId === '*' ? [...snapshots.values()][0] : snapshots.get(dbId)
 
   switch (metric) {
-    case 'cpu_pct':          return snap?.cpuPct ?? 0
-    case 'mem_pct':          return snap?.memPct ?? 0
+    case 'cpu_pct':          return typeof snap?.cpuPct === 'number' ? snap.cpuPct : Number.NaN
+    case 'mem_pct':          return typeof snap?.memPct === 'number' ? snap.memPct : Number.NaN
     case 'conn_pct': {
-      if (!snap || snap.maxConnections === 0) return 0
+      if (!snap || !snap.maxConnections || snap.activeConnections === undefined) return Number.NaN
       return Math.round(100 * snap.activeConnections / snap.maxConnections)
     }
     case 'slow_query_count': {
@@ -85,12 +85,13 @@ function metricValue(
       return dbs.filter(q => q.executedAt >= cutoff).length
     }
     case 'replication_lag': {
-      const replicas = replication.filter(r => r.role === 'replica' && (dbId === '*' || r.dbId === dbId))
-      return replicas.length > 0 ? Math.max(...replicas.map(r => r.lagSeconds)) : 0
+      const replicas = replication.filter(r => r.role === 'replica' && typeof r.lagSeconds === 'number' && (dbId === '*' || r.dbId === dbId))
+      return replicas.length > 0 ? Math.max(...replicas.map(r => r.lagSeconds!)) : Number.NaN
     }
     case 'disk_pct': {
       const cap = capacity.find(c => dbId === '*' || c.dbId === dbId)
       if (!cap || cap.totalSizeMB === 0) return 0
+      if (cap.indexSizeMB === undefined) return Number.NaN
       return Math.round(100 * (cap.dataSizeMB + cap.indexSizeMB) / cap.totalSizeMB)
     }
     default: return 0
@@ -153,6 +154,7 @@ export async function runMonitor(): Promise<MonitorResult> {
     for (const db of targetDbs) {
       if (!active.has(db.id)) continue
       const value = metricValue(metric, db.id, snapshots, capacity, replication, slowQueries)
+      if (!Number.isFinite(value)) continue
       if (!evalOp(value, op, threshold)) continue
 
       thresholdBreaches++
@@ -209,7 +211,7 @@ export async function runMonitor(): Promise<MonitorResult> {
     const db = dbs.find(d => d.id === cap.dbId)
     if (!db || db.engine !== 'postgresql') continue
 
-    if (cap.tableBloatPct >= 20 && !pendingExists(cap.dbId, 'vacuum')) {
+    if (cap.tableBloatPct !== undefined && cap.tableBloatPct >= 20 && !pendingExists(cap.dbId, 'vacuum')) {
       addProposal({
         id: newProposalId(), source: 'performance',
         severity: cap.tableBloatPct >= 35 ? 'high' : 'medium',
@@ -225,7 +227,7 @@ export async function runMonitor(): Promise<MonitorResult> {
       })
     }
 
-    if (cap.indexBloatPct >= 25 && !pendingExists(cap.dbId, 'reindex')) {
+    if (cap.indexBloatPct !== undefined && cap.indexBloatPct >= 25 && !pendingExists(cap.dbId, 'reindex')) {
       addProposal({
         id: newProposalId(), source: 'performance', severity: 'medium',
         title: `REINDEX recommended — ${cap.dbName} index bloat at ${cap.indexBloatPct}%`,
@@ -244,7 +246,7 @@ export async function runMonitor(): Promise<MonitorResult> {
   // ── Connection pool pressure ─────────────────────────────────────────────
   for (const [dbId, snap] of snapshots.entries()) {
     const db = dbs.find(d => d.id === dbId)
-    if (!db || snap.maxConnections === 0) continue
+    if (!db || !snap.maxConnections || snap.activeConnections === undefined) continue
 
     const connPct = Math.round(100 * snap.activeConnections / snap.maxConnections)
 
@@ -269,7 +271,7 @@ export async function runMonitor(): Promise<MonitorResult> {
     }
 
     // ── Redis high memory ──────────────────────────────────────────────────
-    if (db.engine === 'redis' && snap.memPct >= 75 && !pendingExists(dbId, 'config_change')) {
+    if (db.engine === 'redis' && typeof snap.memPct === 'number' && snap.memPct >= 75 && !pendingExists(dbId, 'config_change')) {
       addProposal({
         id: newProposalId(), source: 'performance',
         severity: snap.memPct >= 90 ? 'critical' : 'medium',
@@ -288,7 +290,7 @@ export async function runMonitor(): Promise<MonitorResult> {
 
   // ── Replication lag ──────────────────────────────────────────────────────
   for (const repl of replication) {
-    if (repl.role !== 'replica') continue
+    if (repl.role !== 'replica' || typeof repl.lagSeconds !== 'number') continue
     const db = dbs.find(d => d.id === repl.dbId)
     if (!db) continue
 
@@ -388,7 +390,7 @@ export async function runMonitor(): Promise<MonitorResult> {
 
   // Critical replication lag uses the configured alert threshold.
   for (const repl of replication) {
-    if (repl.role !== 'replica' || repl.lagSeconds < settings.replicationLagAlertSec * 2) continue
+    if (repl.role !== 'replica' || typeof repl.lagSeconds !== 'number' || repl.lagSeconds < settings.replicationLagAlertSec * 2) continue
     if (!incidentOpen(repl.dbId, `Replication lag critical: ${repl.dbName}`)) {
       addIncident({
         dbId: repl.dbId, dbName: repl.dbName, source: 'auto',
@@ -400,10 +402,24 @@ export async function runMonitor(): Promise<MonitorResult> {
     }
   }
 
+  for (const repl of replication) {
+    if (repl.engine !== 'couchbase' || repl.status !== 'critical') continue
+    const dbId = repl.parentDbId ?? repl.dbId.split('-xdcr-')[0]
+    const db = dbs.find(item => item.id === dbId)
+    const title = `Couchbase XDCR task failed: ${repl.dbName}`
+    if (!db || incidentOpen(dbId, title)) continue
+    addIncident({
+      dbId, dbName: db.name, source: 'auto', title,
+      severity: 'high', category: 'replication', status: 'open',
+      notes: `Auto-raised by monitor. XDCR task state: ${repl.syncState ?? 'unknown'}. ${repl.lagLabel ?? ''}`.trim(),
+    })
+    incidentsRaised++
+  }
+
   // Connection pool critical uses the configured threshold plus a 10-point escalation band.
   for (const [dbId, snap] of snapshots.entries()) {
     const db = dbs.find(d => d.id === dbId)
-    if (!db || snap.maxConnections === 0) continue
+    if (!db || !snap.maxConnections || snap.activeConnections === undefined) continue
     const connPct = Math.round(100 * snap.activeConnections / snap.maxConnections)
     const criticalPoolPct = Math.min(100, settings.connectionPoolPctAlert + 10)
     if (connPct >= criticalPoolPct && !incidentOpen(dbId, `Connection pool critical: ${db.name}`)) {

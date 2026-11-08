@@ -8,7 +8,8 @@ import { useAppRefreshInterval } from '@/lib/use-app-refresh-interval'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-function GB(mb: number) {
+function GB(mb?: number) {
+  if (mb === undefined) return '—'
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`
 }
 
@@ -27,7 +28,7 @@ export default function CapacityPage() {
 
       {/* DB Capacity Cards */}
       <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        {list.map((cap: { dbId: string; dbName: string; totalSizeMB: number; dataSizeMB: number; indexSizeMB: number; freeSizeMB: number; growthMBPerDay: number; daysUntilFull: number; indexBloatPct: number; tableBloatPct: number; topTables: { name: string; sizeMB: number; growthMBPerDay: number }[] }) => {
+        {list.map((cap: { dbId: string; dbName: string; totalSizeMB: number; dataSizeMB: number; indexSizeMB?: number; freeSizeMB: number; growthMBPerDay: number; daysUntilFull: number; indexBloatPct?: number; tableBloatPct?: number; topItemsLabel?: string; topTables: { name: string; sizeMB: number; growthMBPerDay: number }[] }) => {
           const usedPct = cap.totalSizeMB > 0 ? Math.min(100, Math.round(((cap.totalSizeMB - cap.freeSizeMB) / cap.totalSizeMB) * 100)) : 0
           const hasGrowth = cap.growthMBPerDay > 0
           const urgency = hasGrowth && cap.daysUntilFull < 14 ? 'critical' : hasGrowth && cap.daysUntilFull < 45 ? 'warning' : 'ok'
@@ -76,10 +77,10 @@ export default function CapacityPage() {
               </div>
 
               {/* Bloat */}
-              {(cap.indexBloatPct > 10 || cap.tableBloatPct > 10) && (
+              {((cap.indexBloatPct ?? 0) > 10 || (cap.tableBloatPct ?? 0) > 10) && (
                 <div className="flex items-center gap-2 p-2 rounded-lg bg-orange-500/5 border border-orange-500/20">
                   <AlertTriangle className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
-                  <span className="text-xs text-orange-300">Index bloat {cap.indexBloatPct}% · Table bloat {cap.tableBloatPct}%</span>
+                  <span className="text-xs text-orange-300">{cap.indexBloatPct !== undefined ? `Index bloat ${cap.indexBloatPct}%` : ''}{cap.indexBloatPct !== undefined && cap.tableBloatPct !== undefined ? ' · ' : ''}{cap.tableBloatPct !== undefined ? `Table bloat ${cap.tableBloatPct}%` : ''}</span>
                 </div>
               )}
 
@@ -87,7 +88,7 @@ export default function CapacityPage() {
               {cap.topTables.length > 0 && (
                 <div>
                   <div className="text-[10px] text-slate-500 font-semibold uppercase mb-1.5">
-                    {hasGrowth ? 'Top tables by growth' : 'Top tables by size'}
+                    {hasGrowth ? `Top ${cap.topItemsLabel ?? 'tables'} by growth` : `Top ${cap.topItemsLabel ?? 'tables'} by size`}
                   </div>
                   {cap.topTables.map(t => (
                     <div key={t.name} className="flex items-center gap-2 py-1">
@@ -104,15 +105,15 @@ export default function CapacityPage() {
       </div>
 
       {/* Bloat remediation */}
-      {list.some((c: { indexBloatPct: number }) => c.indexBloatPct > 10) && (
+      {list.some((c: { indexBloatPct?: number }) => (c.indexBloatPct ?? 0) > 10) && (
         <div className="rounded-2xl bg-[#0f1629] border border-slate-800 p-5">
           <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
             <HardDrive className="w-4 h-4 text-orange-400" /> Index Bloat Remediation
           </h3>
           <div className="space-y-2 text-xs">
             {list
-              .filter((c: { indexBloatPct: number }) => c.indexBloatPct > 10)
-              .map((c: { dbId: string; dbName: string; engine: string; indexBloatPct: number }) => {
+              .filter((c: { indexBloatPct?: number }) => (c.indexBloatPct ?? 0) > 10)
+              .map((c: { dbId: string; dbName: string; engine: string; indexBloatPct?: number }) => {
                 const cmd = c.engine === 'postgresql'
                   ? 'REINDEX DATABASE CONCURRENTLY ' + c.dbName + ';  -- rebuilds all indexes, no table lock'
                   : c.engine === 'mysql'

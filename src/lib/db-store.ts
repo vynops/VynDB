@@ -55,17 +55,17 @@ export interface SlowQuery {
 export interface PerformanceSnapshot {
   dbId: string
   timestamp: string
-  tps: number
+  tps?: number
   latencyP50Ms: number
-  latencyP95Ms: number
-  latencyP99Ms: number
-  activeConnections: number
-  maxConnections: number
-  cpuPct: number
-  memPct: number
-  diskReadMBps: number
-  diskWriteMBps: number
-  cacheHitRatio: number
+  latencyP95Ms?: number
+  latencyP99Ms?: number
+  activeConnections?: number
+  maxConnections?: number
+  cpuPct?: number
+  memPct?: number
+  diskReadMBps?: number
+  diskWriteMBps?: number
+  cacheHitRatio?: number
 }
 
 export interface SchemaTable {
@@ -73,9 +73,9 @@ export interface SchemaTable {
   schema: string
   name: string
   engine: string
-  rowCount: number
-  sizeMB: number
-  indexSizeMB: number
+  rowCount?: number
+  sizeMB?: number
+  indexSizeMB?: number
   columns: { name: string; type: string; nullable: boolean; default?: string }[]
   indexes: { name: string; columns: string[]; unique: boolean; type: string }[]
   lastAnalyzed?: string
@@ -94,6 +94,7 @@ export interface BackupJob {
   rpoHrs: number    // RPO this backup achieves
   rtoMins: number   // estimated RTO
   location: string
+  backupName?: string
   error?: string
   lastVerifiedAt?: string
   lastVerificationStatus?: 'verified' | 'invalid' | 'not_verified'
@@ -102,15 +103,18 @@ export interface BackupJob {
 
 export interface ReplicationStatus {
   dbId: string
+  parentDbId?: string
   collectedAt?: string
   dbName: string
   engine: DbEngine
   role: 'primary' | 'replica' | 'standby' | 'unknown'
-  lagSeconds: number
+  lagSeconds?: number
+  lagLabel?: string
+  changesRemaining?: number
   lagBytes?: number
   syncState?: string
   connectedReplicas?: number
-  lastSyncAt: string
+  lastSyncAt?: string
   status: 'healthy' | 'warning' | 'critical'
 }
 
@@ -450,12 +454,13 @@ export interface CapacityEntry {
   dbName: string
   totalSizeMB: number
   dataSizeMB: number
-  indexSizeMB: number
+  indexSizeMB?: number
   freeSizeMB: number
   growthMBPerDay: number
   daysUntilFull: number
-  indexBloatPct: number
-  tableBloatPct: number
+  indexBloatPct?: number
+  tableBloatPct?: number
+  topItemsLabel?: string
   topTables: { name: string; sizeMB: number; growthMBPerDay: number }[]
 }
 

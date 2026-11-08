@@ -67,7 +67,7 @@ function buildRichContext(): string {
     const candidate = snaps.get(db.id)
     const snap = current && candidate && !isStatusStale(candidate.timestamp) ? candidate : undefined
     const capacity = current ? cap.find(c => c.dbId === db.id && c.collectedAt && !isStatusStale(c.collectedAt)) : undefined
-    const replication = current ? repl.find(r => r.dbId === db.id && r.collectedAt && !isStatusStale(r.collectedAt)) : undefined
+    const replication = current ? repl.find(r => (r.dbId === db.id || r.parentDbId === db.id) && r.collectedAt && !isStatusStale(r.collectedAt)) : undefined
     const bk = lastBackup.get(db.id)
     const tables = schema.filter(s => s.dbId === db.id)
 
@@ -77,18 +77,21 @@ function buildRichContext(): string {
     lines.push(`  capabilities: ${capabilities.map(capability => `${capability.key}=${capability.state}`).join(', ')}`)
     if (db.notes) lines.push(`  notes: ${db.notes}`)
     if (snap) {
-      lines.push(`  perf(data_quality=collector; latency_percentiles=estimated_from_probe): tps=${snap.tps} lat_p50=${snap.latencyP50Ms}ms lat_p95=${snap.latencyP95Ms}ms lat_p99=${snap.latencyP99Ms}ms`)
-      lines.push(`  connections: ${snap.activeConnections}/${snap.maxConnections} (${Math.round(snap.activeConnections/snap.maxConnections*100)}%) | cache_hit:${snap.cacheHitRatio}%`)
+      lines.push(`  perf(data_quality=collector): tps=${snap.tps ?? 'unavailable'} lat_p50=${snap.latencyP50Ms ?? 'unavailable'}ms lat_p95=${snap.latencyP95Ms ?? 'unavailable'}ms lat_p99=${snap.latencyP99Ms ?? 'unavailable'}ms`)
+      const connectionUsage = snap.maxConnections && snap.activeConnections !== undefined
+        ? `${snap.activeConnections}/${snap.maxConnections} (${Math.round(snap.activeConnections / snap.maxConnections * 100)}%)`
+        : `${snap.activeConnections ?? 'unavailable'}/unavailable`
+      lines.push(`  connections: ${connectionUsage} | cache_hit:${snap.cacheHitRatio ?? 'unavailable'}`)
     }
     if (capacity) {
-      lines.push(`  size: total=${Math.round(capacity.totalSizeMB)}MB data=${capacity.dataSizeMB}MB idx=${capacity.indexSizeMB}MB free=${capacity.freeSizeMB}MB`)
-      lines.push(`  growth:${capacity.growthMBPerDay}MB/d | idx_bloat:${capacity.indexBloatPct}% tbl_bloat:${capacity.tableBloatPct}%`)
+      lines.push(`  size: total=${Math.round(capacity.totalSizeMB)}MB data=${capacity.dataSizeMB}MB idx=${capacity.indexSizeMB ?? 'unavailable'}MB free=${capacity.freeSizeMB}MB`)
+      lines.push(`  growth:${capacity.growthMBPerDay}MB/d | idx_bloat:${capacity.indexBloatPct ?? 'unavailable'}% tbl_bloat:${capacity.tableBloatPct ?? 'unavailable'}%`)
       if (capacity.topTables.length) lines.push(`  top tables by size: ${capacity.topTables.slice(0,5).map(t=>`${t.name}(${t.sizeMB}MB)`).join(', ')}`)
     }
     if (tables.length) {
-      lines.push(`  schema: ${tables.length} tables | ${tables.slice(0,6).map(t=>`${t.name}(${t.rowCount.toLocaleString()} rows, ${t.columns.length} cols, ${t.indexes.length} idx)`).join(', ')}`)
+      lines.push(`  schema: ${tables.length} collections/tables | ${tables.slice(0,6).map(t=>`${t.name}(${t.rowCount?.toLocaleString() ?? 'row count unavailable'} rows, ${t.columns.length} cols, ${t.indexes.length} idx)`).join(', ')}`)
     }
-    if (replication) lines.push(`  replication: role=${replication.role} lag=${replication.lagSeconds}s state=${replication.syncState??'n/a'} replicas=${replication.connectedReplicas??0} status=${replication.status}`)
+    if (replication) lines.push(`  replication: role=${replication.role} lag=${replication.lagLabel ?? (typeof replication.lagSeconds === 'number' ? `${replication.lagSeconds}s` : 'unavailable')} state=${replication.syncState??'n/a'} replicas=${replication.connectedReplicas??'unavailable'} status=${replication.status}`)
     if (bk) {
       const ageH = Math.round((Date.now() - new Date(bk.completedAt).getTime()) / 3600000)
       lines.push(`  last backup: ${bk.type} ${ageH}h ago | size:${bk.sizeMB}MB | at:${bk.completedAt}`)

@@ -44,10 +44,10 @@ export default function PerformancePage() {
     !isStatusStale(selectedStatus.lastChecked) && !isStatusStale(latest.timestamp)
 
   // Format time for chart labels
-  const chartData = snapshots.map((s: { timestamp: string; tps: number; latencyP95Ms: number; latencyP99Ms: number; activeConnections: number; maxConnections: number; cpuPct: number; memPct: number; cacheHitRatio: number; diskReadMBps: number; diskWriteMBps: number }) => ({
+  const chartData = snapshots.map((s: { timestamp: string; tps?: number; latencyP50Ms?: number; latencyP95Ms?: number; latencyP99Ms?: number; activeConnections?: number; maxConnections?: number; cpuPct?: number; memPct?: number; cacheHitRatio?: number; diskReadMBps?: number; diskWriteMBps?: number }) => ({
     ...s,
     time: new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    connPct: Math.round((s.activeConnections / s.maxConnections) * 100),
+    connPct: s.maxConnections && s.activeConnections !== undefined ? Math.round((s.activeConnections / s.maxConnections) * 100) : null,
   }))
 
   return (
@@ -86,12 +86,12 @@ export default function PerformancePage() {
       {/* Current stats */}
       {current && (
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-          <MetricCard label="TPS" value={latest.tps} color="text-emerald-400" sub="transactions/sec" />
-          <MetricCard label="Latency p50" value={latest.latencyP50Ms} unit="ms" color="text-blue-400" />
-          <MetricCard label="Latency p95" value={latest.latencyP95Ms} unit="ms" color="text-yellow-400" />
-          <MetricCard label="Latency p99" value={latest.latencyP99Ms} unit="ms" color={latest.latencyP99Ms > 100 ? 'text-red-400' : 'text-orange-400'} />
-          <MetricCard label="Connections" value={`${latest.activeConnections}/${latest.maxConnections}`} color="text-violet-400" sub={`${Math.round(latest.activeConnections / latest.maxConnections * 100)}% used`} />
-          <MetricCard label="Cache Hit" value={latest.cacheHitRatio} unit="%" color={latest.cacheHitRatio >= 95 ? 'text-emerald-400' : 'text-yellow-400'} />
+          <MetricCard label="TPS" value={latest.tps ?? '—'} color="text-emerald-400" sub="operations/sec" />
+          <MetricCard label="Latency p50" value={latest.latencyP50Ms ?? '—'} unit={latest.latencyP50Ms === undefined ? undefined : 'ms'} color="text-blue-400" />
+          <MetricCard label="Latency p95" value={latest.latencyP95Ms ?? '—'} unit={latest.latencyP95Ms === undefined ? undefined : 'ms'} color="text-yellow-400" />
+          <MetricCard label="Latency p99" value={latest.latencyP99Ms ?? '—'} unit={latest.latencyP99Ms === undefined ? undefined : 'ms'} color={latest.latencyP99Ms !== undefined && latest.latencyP99Ms > 100 ? 'text-red-400' : 'text-orange-400'} />
+          <MetricCard label="Connections" value={`${latest.activeConnections ?? '—'}/${latest.maxConnections ?? '—'}`} color="text-violet-400" sub={latest.maxConnections && latest.activeConnections !== undefined ? `${Math.round(latest.activeConnections / latest.maxConnections * 100)}% used` : undefined} />
+          <MetricCard label="Cache Hit" value={latest.cacheHitRatio ?? '—'} unit={latest.cacheHitRatio === undefined ? undefined : '%'} color={latest.cacheHitRatio !== undefined && latest.cacheHitRatio >= 95 ? 'text-emerald-400' : 'text-yellow-400'} />
         </div>
       )}
 

@@ -51,11 +51,11 @@ const CAPABILITIES: Record<DbEngine, DatabaseCapability[]> = {
     { key: 'security', label: 'Security checks', state: 'partial', requirement: 'Basic configuration checks only.' },
   ],
   couchbase: [
-    { key: 'performance', label: 'Performance metrics', state: 'partial', requirement: 'Host CPU, memory, and disk I/O are not collected.' },
-    { key: 'slowQueries', label: 'Slow queries', state: 'unavailable', requirement: 'Couchbase slow-query collection is not implemented yet.' },
-    { key: 'schema', label: 'Schema inspection', state: 'partial', requirement: 'Couchbase collections and indexes are not fully introspected.' },
-    { key: 'capacity', label: 'Capacity metrics', state: 'partial' },
-    { key: 'replication', label: 'Replication', state: 'unavailable', requirement: 'Couchbase cluster collection is not implemented yet.' },
+    { key: 'performance', label: 'Performance metrics', state: 'partial', requirement: 'Management API probe latency, node CPU/memory, connections, operations, and bucket capacity are collected; host disk I/O, cache hit, max connections, and p95/p99 latency are unavailable.' },
+    { key: 'slowQueries', label: 'Slow queries', state: 'requires_configuration', requirement: 'Query Service completed-request access requires Query Manage privileges.' },
+    { key: 'schema', label: 'Schema inspection', state: 'partial', requirement: 'Scopes, collections, inferred fields, and GSI metadata are best-effort; exact row counts and per-collection sizes are not collected.' },
+    { key: 'capacity', label: 'Capacity metrics', state: 'partial', requirement: 'Cluster disk and bucket data sizes are collected; index split and bloat are unavailable.' },
+    { key: 'replication', label: 'Replication', state: 'partial', requirement: 'XDCR task state and changes remaining are reported; time-based lag is not available.' },
     { key: 'security', label: 'Security checks', state: 'partial' },
   ],
 }

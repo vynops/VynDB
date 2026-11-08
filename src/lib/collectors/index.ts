@@ -67,7 +67,7 @@ export async function runAllCollectors(): Promise<CollectResult> {
   await collectMongo(dbs, { snapshots: out.snapshots, slowQueries: out.slowQueries, schema: out.schema, capacity: out.capacity }).catch(e => errors.push(`mongo: ${(e as Error).message}`))
   await collectRedis(dbs, { snapshots: out.snapshots, slowQueries: out.slowQueries, capacity: out.capacity, security: out.security }).catch(e => errors.push(`redis: ${(e as Error).message}`))
   await collectSqlServer(dbs, { snapshots: out.snapshots, slowQueries: out.slowQueries, schema: out.schema, capacity: out.capacity, security: out.security }).catch(e => errors.push(`mssql: ${(e as Error).message}`))
-  await collectCouchbase(dbs, { snapshots: out.snapshots, slowQueries: out.slowQueries, schema: out.schema, capacity: out.capacity, security: out.security }).catch(e => errors.push(`couchbase: ${(e as Error).message}`))
+  await collectCouchbase(dbs, { snapshots: out.snapshots, slowQueries: out.slowQueries, schema: out.schema, replication: out.replication, capacity: out.capacity, security: out.security }).catch(e => errors.push(`couchbase: ${(e as Error).message}`))
 
   // ── Merge with existing data ──────────────────────────────
 

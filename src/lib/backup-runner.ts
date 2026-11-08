@@ -4,13 +4,14 @@
  * Requires: vyndb user is in the `docker` group on the server.
  */
 
-import { execSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import { loadDatabases, saveBackup, loadBackups, type BackupJob, type DbConnection } from './db-store'
 
 const BACKUP_DIR = path.join(process.cwd(), 'backups')
+const COUCHBASE_REPO = 'vyndb'
 
 // Map db id → docker container name
 const CONTAINER_MAP: Record<string, string> = {
@@ -39,6 +40,110 @@ function dockerExec(cmd: string, opts: { timeout?: number } = {}): string {
   }).toString()
 }
 
+function safeId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, '_')
+}
+
+function couchbaseArchiveDir(db: DbConnection, targetDir: string): string {
+  return path.join(targetDir, 'couchbase', safeId(db.id))
+}
+
+function couchbaseBackupEnv(db: DbConnection): NodeJS.ProcessEnv {
+  const host = db.host.replace(/^(https?|couchbases?):\/\//i, '')
+  return {
+    ...process.env,
+    CB_CLUSTER: `${db.ssl ? 'couchbases' : 'couchbase'}://${host}`,
+    CB_USERNAME: db.username,
+    CB_PASSWORD: db.passwordEnc,
+  }
+}
+
+function runCouchbaseBackupCommand(db: DbConnection, args: string[], timeout = 120_000): string {
+  const binary = process.env.VYNDB_CBBACKUPMGR_PATH || 'cbbackupmgr'
+  return execFileSync(binary, args, {
+    cwd: process.cwd(),
+    env: couchbaseBackupEnv(db),
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout,
+    windowsHide: true,
+  })
+}
+
+function directorySize(dir: string): number {
+  let total = 0
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) total += directorySize(fullPath)
+    else if (entry.isFile()) total += fs.statSync(fullPath).size
+  }
+  return total
+}
+
+function couchbaseInfo(db: DbConnection, archiveDir: string): {
+  repos?: { name: string; backups?: { date?: string; complete?: boolean; size?: number }[] }[]
+} {
+  const output = runCouchbaseBackupCommand(db, ['info', '--archive', archiveDir, '--repo', COUCHBASE_REPO, '--json'])
+  return JSON.parse(output)
+}
+
+function verifyCouchbaseBackupRecord(backup: BackupJob, db: DbConnection): { ok: boolean; message: string; sizeMB?: number } {
+  const location = backup.location?.startsWith('file://') ? backup.location.slice(7) : backup.location
+  if (!location || !backup.backupName) return { ok: false, message: 'Couchbase backup metadata is missing.' }
+  const repoDir = path.dirname(location)
+  const archiveDir = path.dirname(repoDir)
+  if (path.basename(repoDir) !== COUCHBASE_REPO || path.basename(archiveDir) !== safeId(db.id)) {
+    return { ok: false, message: 'Couchbase backup path does not match the database repository.' }
+  }
+  try {
+    const info = couchbaseInfo(db, archiveDir)
+    const record = info.repos?.find(repo => repo.name === COUCHBASE_REPO)?.backups?.find(item => item.date === backup.backupName)
+    const size = fs.existsSync(location) ? directorySize(location) : 0
+    return record?.complete && size > 0
+      ? { ok: true, message: 'cbbackupmgr confirms the backup is complete and readable.', sizeMB: Math.round(size / 1024 / 1024 * 100) / 100 }
+      : { ok: false, message: 'cbbackupmgr did not confirm a complete, non-empty backup.' }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+export function verifyCouchbaseBackup(backup: BackupJob): { ok: boolean; message: string; sizeMB?: number } {
+  const db = loadDatabases().find(item => item.id === backup.dbId && item.engine === 'couchbase')
+  return db ? verifyCouchbaseBackupRecord(backup, db) : { ok: false, message: 'Couchbase connection was not found.' }
+}
+
+function runCouchbaseBackup(db: DbConnection, targetDir: string): { backupFile: string; backupName: string; sizeMB: number } {
+  const archiveDir = couchbaseArchiveDir(db, targetDir)
+  const repoDir = path.join(archiveDir, COUCHBASE_REPO)
+  ensureBackupDir(archiveDir)
+  const env = couchbaseBackupEnv(db)
+  const binary = process.env.VYNDB_CBBACKUPMGR_PATH || 'cbbackupmgr'
+
+  if (!fs.existsSync(path.join(repoDir, 'backup-meta.json'))) {
+    execFileSync(binary, ['config', '--archive', archiveDir, '--repo', COUCHBASE_REPO], {
+      cwd: process.cwd(), env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000, windowsHide: true,
+    })
+  }
+
+  execFileSync(binary, ['backup', '--archive', archiveDir, '--repo', COUCHBASE_REPO, '--cluster', env.CB_CLUSTER!, '--no-progress-bar'], {
+    cwd: process.cwd(), env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30 * 60_000, windowsHide: true,
+  })
+
+  const infoOutput = execFileSync(binary, ['info', '--archive', archiveDir, '--repo', COUCHBASE_REPO, '--json'], {
+    cwd: process.cwd(), env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000, windowsHide: true,
+  })
+  const info = JSON.parse(infoOutput) as { repos?: { name: string; backups?: { date?: string; complete?: boolean }[] }[] }
+  const backups = info.repos?.find(repo => repo.name === COUCHBASE_REPO)?.backups ?? []
+  const latest = [...backups].filter(item => item.complete && item.date).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]
+  if (!latest?.date) throw new Error('cbbackupmgr completed without reporting a complete backup.')
+  const backupFile = path.join(repoDir, latest.date)
+  if (!fs.existsSync(backupFile)) throw new Error('cbbackupmgr reported a backup directory that does not exist.')
+  const sizeBytes = directorySize(backupFile)
+  if (sizeBytes <= 0) throw new Error('cbbackupmgr reported an empty backup.')
+  const sizeMB = Math.round(sizeBytes / 1024 / 1024 * 100) / 100
+  return { backupFile, backupName: latest.date, sizeMB }
+}
+
 function stamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
 }
@@ -56,21 +161,37 @@ export async function runBackup(db: DbConnection, backupType: BackupType = 'full
   ensureBackupDir(targetDir)
 
   const container = CONTAINER_MAP[db.id]
-  if (!container) {
+  if (!container && db.engine !== 'couchbase') {
     return {
       ok: false,
       job: makeJob(db, 'failed', 0, '', 'No container mapping for this DB'),
       error: `No container mapping for DB id: ${db.id}`,
     }
   }
+  if (db.engine === 'couchbase' && backupType !== 'full') {
+    return {
+      ok: false,
+      job: makeJob(db, 'failed', 0, '', 'Couchbase cbbackupmgr currently supports full-cluster backups only'),
+      error: 'Couchbase cbbackupmgr currently supports full-cluster backups only',
+    }
+  }
 
   const ts = stamp()
   const startedAt = new Date().toISOString()
   let backupFile = ''
+  let backupName: string | undefined
   let sizeMB = 0
 
   try {
     switch (db.engine) {
+      case 'couchbase': {
+        const result = runCouchbaseBackup(db, targetDir)
+        backupFile = result.backupFile
+        backupName = result.backupName
+        sizeMB = result.sizeMB
+        break
+      }
+
       // ── PostgreSQL ────────────────────────────────────────────────────────
       case 'postgresql': {
         const ext = backupType === 'full' ? 'dump' : 'sql'
@@ -148,7 +269,7 @@ export async function runBackup(db: DbConnection, backupType: BackupType = 'full
         }
     }
 
-    const job = makeJob(db, 'succeeded', sizeMB, backupFile, undefined, startedAt, backupType)
+    const job = makeJob(db, 'succeeded', sizeMB, backupFile, undefined, startedAt, backupType, backupName)
     saveBackup(job)
     return { ok: true, job }
 
@@ -158,17 +279,16 @@ export async function runBackup(db: DbConnection, backupType: BackupType = 'full
     if (backupFile && fs.existsSync(backupFile)) {
       try { fs.unlinkSync(backupFile) } catch { /* ignore */ }
     }
-    const job = makeJob(db, 'failed', 0, backupFile, errMsg, startedAt, backupType)
+    const job = makeJob(db, 'failed', 0, backupFile, errMsg, startedAt, backupType, backupName)
     saveBackup(job)
     return { ok: false, job, error: errMsg }
   }
 }
 
 export async function runAllBackups(backupType: BackupType = 'full', customPath?: string): Promise<BackupRunResult[]> {
-  const dbs = loadDatabases().filter(d =>
-    ['postgresql', 'mysql', 'mongodb', 'redis'].includes(d.engine) &&
-    CONTAINER_MAP[d.id]
-  )
+  const dbs = loadDatabases().filter(d => d.engine === 'couchbase' || (
+    ['postgresql', 'mysql', 'mongodb', 'redis'].includes(d.engine) && CONTAINER_MAP[d.id]
+  ))
   const targets = dbs.filter(d => d.id !== 'db-lab-pg-replica')
   const results: BackupRunResult[] = []
   for (const db of targets) {
@@ -187,7 +307,23 @@ export function deleteBackup(id: string): { ok: boolean; fileDeleted: boolean; e
   if (backup.location?.startsWith('file://')) {
     const filePath = backup.location.replace('file://', '')
     try {
-      if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); fileDeleted = true }
+      const db = loadDatabases().find(item => item.id === backup.dbId)
+      if (db?.engine === 'couchbase') {
+        const repoDir = path.dirname(filePath)
+        const archiveDir = path.dirname(repoDir)
+        const repo = path.basename(repoDir)
+        const backupName = backup.backupName || path.basename(filePath)
+        if (repo !== COUCHBASE_REPO || path.basename(archiveDir) !== safeId(db.id)) {
+          return { ok: false, fileDeleted: false, error: 'Couchbase backup path does not match the database repository.' }
+        }
+        runCouchbaseBackupCommand(db, ['remove', '--archive', archiveDir, '--repo', repo, '--backups', backupName])
+        fileDeleted = true
+      } else if (fs.existsSync(filePath)) {
+        const stat = fs.statSync(filePath)
+        if (stat.isDirectory()) fs.rmSync(filePath, { recursive: true })
+        else fs.unlinkSync(filePath)
+        fileDeleted = true
+      }
     } catch (e) {
       return { ok: false, fileDeleted: false, error: (e as Error).message }
     }
@@ -219,11 +355,25 @@ export function cleanupOldBackups(retentionDays: number): { filesDeleted: number
 
   // Remove old records from JSON
   const list = loadBackups()
-  const recent = list.filter(b => {
-    const ts = b.completedAt ?? b.startedAt ?? b.scheduledAt
-    return new Date(ts).getTime() > cutoff
-  })
-  const recordsRemoved = list.length - recent.length
+  const recent: BackupJob[] = []
+  let recordsRemoved = 0
+  for (const backup of list) {
+    const ts = backup.completedAt ?? backup.startedAt ?? backup.scheduledAt
+    if (new Date(ts).getTime() > cutoff) {
+      recent.push(backup)
+      continue
+    }
+    const db = loadDatabases().find(item => item.id === backup.dbId)
+    if (db?.engine === 'couchbase') {
+      const result = deleteBackup(backup.id)
+      if (!result.ok) {
+        recent.push(backup)
+        continue
+      }
+      if (result.fileDeleted) filesDeleted++
+    }
+    recordsRemoved++
+  }
   if (recordsRemoved > 0) {
     const DATA_DIR = path.join(process.cwd(), 'data')
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -237,13 +387,21 @@ export function cleanupOldBackups(retentionDays: number): { filesDeleted: number
 export function backupDiskStats(): { fileCount: number; totalMB: number; oldestDate: string | null; path: string } {
   if (!fs.existsSync(BACKUP_DIR)) return { fileCount: 0, totalMB: 0, oldestDate: null, path: BACKUP_DIR }
 
-  const files = fs.readdirSync(BACKUP_DIR)
+  const files: string[] = []
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const filePath = path.join(dir, entry.name)
+      if (entry.isDirectory()) walk(filePath)
+      else if (entry.isFile()) files.push(filePath)
+    }
+  }
+  walk(BACKUP_DIR)
   let totalBytes = 0
   let oldestMs = Date.now()
 
   for (const file of files) {
     try {
-      const stat = fs.statSync(path.join(BACKUP_DIR, file))
+      const stat = fs.statSync(file)
       totalBytes += stat.size
       if (stat.mtimeMs < oldestMs) oldestMs = stat.mtimeMs
     } catch { /* ignore */ }
@@ -265,6 +423,7 @@ function makeJob(
   error?: string,
   startedAt?: string,
   backupType: BackupType = 'full',
+  backupName?: string,
 ): BackupJob {
   const now = new Date().toISOString()
   return {
@@ -279,6 +438,7 @@ function makeJob(
     rpoHrs: db.engine === 'redis' ? 0.5 : 24,
     rtoMins: db.engine === 'redis' ? 2 : db.engine === 'postgresql' ? 30 : 15,
     location: location ? `file://${location}` : '',
+    backupName,
     error,
   }
 }

@@ -16,11 +16,12 @@ function parseCols(cols: string[] | string): string[] {
 }
 interface TableRow {
   dbId: string; schema: string; name: string; engine: string;
-  rowCount: number; sizeMB: number; indexSizeMB: number;
+  rowCount?: number; sizeMB?: number; indexSizeMB?: number;
   columns: Column[]; indexes: Index[]; lastAnalyzed?: string
 }
 
-function formatMB(mb: number): string {
+function formatMB(mb?: number): string {
+  if (mb === undefined) return '—'
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
   return `${mb} MB`
 }
@@ -71,7 +72,7 @@ export default function SchemaPage() {
                 <Table2 className="w-4 h-4 text-slate-500 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-semibold text-white truncate">{t.name}</div>
-                  <div className="text-[10px] text-slate-500">{t.schema} · {t.rowCount.toLocaleString()} rows · {formatMB(t.sizeMB)}</div>
+                  <div className="text-[10px] text-slate-500">{t.schema} · {t.rowCount?.toLocaleString() ?? '—'} rows · {formatMB(t.sizeMB)}</div>
                 </div>
                 <ChevronRight className="w-3 h-3 text-slate-600 flex-shrink-0" />
               </button>
@@ -103,7 +104,7 @@ export default function SchemaPage() {
                   <span className="text-xs text-slate-500">{selectedTable.engine}</span>
                 </div>
                 <div className="flex gap-4 mt-2 text-xs text-slate-400">
-                  <span>{selectedTable.rowCount.toLocaleString()} rows</span>
+                  <span>{selectedTable.rowCount?.toLocaleString() ?? '—'} rows</span>
                   <span>Data: {formatMB(selectedTable.sizeMB)}</span>
                   <span>Indexes: {formatMB(selectedTable.indexSizeMB)}</span>
                   {selectedTable.lastAnalyzed && <span>Analyzed {new Date(selectedTable.lastAnalyzed).toLocaleDateString()}</span>}
@@ -112,6 +113,9 @@ export default function SchemaPage() {
 
               {/* Columns */}
               <div className="px-5 py-4">
+                {selectedTable.engine === 'couchbase' && selectedTable.columns.length === 0 && (
+                  <p className="mb-3 text-xs text-slate-500">Collection names are listed; document fields are unavailable for this collection.</p>
+                )}
                 <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">Columns ({selectedTable.columns.length})</h4>
                 <div className="rounded-xl border border-slate-700 overflow-hidden">
                   <table className="w-full text-xs">

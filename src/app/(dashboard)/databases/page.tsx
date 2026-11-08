@@ -77,7 +77,7 @@ export default function DatabasesPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const capByDb  = Object.fromEntries((Array.isArray(capList)  ? capList  : []).map((c: any) => [c.dbId, c]))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const replByDb = Object.fromEntries((Array.isArray(replList) ? replList : []).map((r: any) => [r.dbId, r]))
+  const replByDb = Object.fromEntries((Array.isArray(replList) ? replList : []).map((r: any) => [r.parentDbId ?? r.dbId, r]))
 
   const [showModal, setShowModal] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -249,7 +249,7 @@ export default function DatabasesPage() {
                   repl.status === 'healthy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                   : repl.status === 'warning' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                   : 'bg-red-500/10 text-red-400 border-red-500/20')}>
-                  replica · {repl.lagSeconds}s lag
+                  replica · {repl.lagLabel ?? (typeof repl.lagSeconds === 'number' ? `${repl.lagSeconds}s lag` : 'lag unavailable')}
                 </span>
               )}
               {status !== 'error' && status !== 'unknown' && repl && repl.role === 'primary' && repl.connectedReplicas > 0 && (
@@ -265,8 +265,8 @@ export default function DatabasesPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-slate-500">Connections</span>
                   <span className="text-[10px] font-bold text-slate-300">
-                    {perf.activeConnections}
-                    <span className="text-slate-600">/{perf.maxConnections}</span>
+                    {perf.activeConnections ?? '—'}
+                    <span className="text-slate-600">/{perf.maxConnections ?? '—'}</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -278,15 +278,14 @@ export default function DatabasesPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-slate-500">TPS</span>
-                  <span className="text-[10px] font-bold text-slate-300">{perf.tps.toLocaleString()}/s</span>
+                  <span className="text-[10px] font-bold text-slate-300">{perf.tps?.toLocaleString() ?? '—'}/s</span>
                 </div>
                 {showCache && (
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-slate-500">Cache hit</span>
-                    <span className={cn('text-[10px] font-bold',
-                      perf.cacheHitRatio >= 95 ? 'text-emerald-400' : perf.cacheHitRatio >= 85 ? 'text-yellow-400' : 'text-red-400')}>
-                      {perf.cacheHitRatio.toFixed(1)}%
-                    </span>
+                    {typeof perf.cacheHitRatio === 'number'
+                      ? <span className={cn('text-[10px] font-bold', perf.cacheHitRatio >= 95 ? 'text-emerald-400' : perf.cacheHitRatio >= 85 ? 'text-yellow-400' : 'text-red-400')}>{perf.cacheHitRatio.toFixed(1)}%</span>
+                      : <span className="text-[10px] font-bold text-slate-500">—</span>}
                   </div>
                 )}
                 {cap && status !== 'error' && status !== 'unknown' && (

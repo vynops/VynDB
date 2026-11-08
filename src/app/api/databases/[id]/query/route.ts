@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { loadDatabases, recordDatabaseConnectionFailure } from '@/lib/db-store'
 import { getPgPool, getMysqlPool, getMongoClient, getRedisClient, getMssqlPool } from '@/lib/db-connections'
+import { CouchbaseApiError, runCouchbaseQuery } from '@/lib/couchbase-client'
 
 const MAX_ROWS = 500
 const TIMEOUT_MS = 30_000
@@ -9,6 +10,7 @@ const TIMEOUT_MS = 30_000
 function isConnectionError(error: unknown): boolean {
   const { code = '', name = '' } = error as { code?: string; name?: string }
   return code.startsWith('08') || ['ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'PROTOCOL_CONNECTION_LOST'].includes(code)
+    || ['AbortError', 'TimeoutError', 'TypeError'].includes(name)
     || name === 'MongoNetworkError' || name === 'MongoServerSelectionError'
 }
 
@@ -154,6 +156,28 @@ export async function POST(
         })
       }
 
+      case 'couchbase': {
+        const result = await runCouchbaseQuery<{
+          results?: Record<string, unknown>[]
+          metrics?: { resultCount?: number }
+          errors?: { msg?: string }[]
+        }>(db, sql, { timeoutMs: TIMEOUT_MS })
+        if (result.errors?.length) {
+          return NextResponse.json({ error: result.errors[0].msg ?? 'Couchbase query failed' }, { status: 400 })
+        }
+        const rows = (result.results ?? []).slice(0, limit)
+        const columns = rows.length > 0 ? Object.keys(rows[0]) : []
+        return NextResponse.json({
+          columns,
+          rows: rows.map(row => columns.map(column => {
+            const value = row[column]
+            return value && typeof value === 'object' ? JSON.stringify(value) : value ?? null
+          })),
+          rowCount: result.metrics?.resultCount ?? rows.length,
+          durationMs: Date.now() - t0,
+        })
+      }
+
       default:
         // SQL Server
         if (db.engine === 'sqlserver') {
@@ -181,6 +205,16 @@ export async function POST(
         return NextResponse.json({ error: `Engine '${db.engine}' query console not supported` }, { status: 400 })
     }
   } catch (e) {
+    if (e instanceof CouchbaseApiError) {
+      if (e.status === 401 || e.status === 403) {
+        return NextResponse.json({ error: 'Couchbase rejected the credentials or query permissions' }, { status: 403 })
+      }
+      if (e.status >= 500) {
+        recordDatabaseConnectionFailure(db.id)
+        return NextResponse.json({ error: 'Couchbase Query Service is unavailable' }, { status: 503 })
+      }
+      return NextResponse.json({ error: e.message }, { status: e.status })
+    }
     if (isConnectionError(e)) {
       recordDatabaseConnectionFailure(db.id)
       return NextResponse.json({ error: 'Database connection failed during query; check the database service and network' }, { status: 503 })

@@ -4,6 +4,7 @@ import { MongoClient } from 'mongodb'
 import Redis from 'ioredis'
 import * as mssql from 'mssql'
 import type { DbConnection } from './db-store'
+import { couchbaseJson, runCouchbaseQuery } from './couchbase-client'
 
 // Connection pools per DB id
 const pgPools    = new Map<string, Pool>()
@@ -11,26 +12,6 @@ const mysqlPools = new Map<string, mysql.Pool>()
 const mongos     = new Map<string, MongoClient>()
 const redises    = new Map<string, Redis>()
 const mssqlPools = new Map<string, mssql.ConnectionPool>()
-
-function getCouchbaseBaseUrl(db: DbConnection): string {
-  const protocol = db.ssl ? 'https' : 'http'
-  return `${protocol}://${db.host}:${db.port}`
-}
-
-async function fetchCouchbaseJson<T>(db: DbConnection, apiPath: string): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' }
-  if (db.username) {
-    const auth = Buffer.from(`${db.username}:${db.passwordEnc}`).toString('base64')
-    headers.Authorization = `Basic ${auth}`
-  }
-
-  const url = `${getCouchbaseBaseUrl(db)}${apiPath}`
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(5000) })
-  if (!res.ok) {
-    throw new Error(`Couchbase API ${apiPath} failed (${res.status})`)
-  }
-  return await res.json() as T
-}
 
 export async function getPgPool(db: DbConnection): Promise<Pool | null> {
   if (pgPools.has(db.id)) return pgPools.get(db.id)!
@@ -168,8 +149,9 @@ export async function testConnection(db: DbConnection): Promise<{ ok: boolean; m
         return { ok: true, message: 'Connected', version: ver.substring(0, 50) }
       }
       case 'couchbase': {
-        const info = await fetchCouchbaseJson<{ implementationVersion?: string; nodes?: Array<{ version?: string }> }>(db, '/pools/default')
+        const info = await couchbaseJson<{ implementationVersion?: string; nodes?: Array<{ version?: string }> }>(db, '/pools/default')
         const version = info.implementationVersion || info.nodes?.[0]?.version || 'Couchbase'
+        await runCouchbaseQuery(db, 'SELECT 1 AS vyndb_connection_test', { timeoutMs: 10_000 })
         return { ok: true, message: 'Connected', version }
       }
       default:
