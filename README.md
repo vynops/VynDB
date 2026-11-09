@@ -32,7 +32,7 @@ Fleet performance, replication, and capacity views show collected data only for 
 
 VynDB is a self-hosted database operations platform for **monitoring, AI-assisted query tuning, security auditing, backup management, incident response, and human-approved remediation** across your database fleet.
 
-Built on **Next.js 16 App Router** with a lightweight JSON file store and Groq-powered AI, VynDB collects real metrics every 5 minutes from your databases using native drivers and management APIs — no agents, no sidecars, no vendor lock-in.
+Built on **Next.js 16 App Router** with a lightweight JSON file store and configurable multi-provider AI, VynDB collects real metrics every 5 minutes from your databases using native drivers and management APIs — no agents, no sidecars, no vendor lock-in.
 
 > **Design philosophy:** VynDB does not replace your DBA team. It makes every engineer as capable as your best DBA.
 
@@ -124,7 +124,7 @@ Automatic capture and AI-assisted resolution of slow queries across all engines.
 - **One-click AI analysis** per query — bottleneck identification, index suggestions, rewrite strategies, estimated gain, confidence score
 - **Query history** — deduplicates by query fingerprint, retains top 200
 
-### 🧠 AI Copilot (Groq-powered)
+### 🧠 AI Copilot (Multi-provider)
 A conversational database expert with full awareness of your environment.
 
 **What it knows in real-time:**
@@ -333,7 +333,7 @@ Couchbase collection includes reachability, management-API probe latency, node C
 - npm 9+
 - PM2 (`npm install -g pm2`)
 - Docker + Docker Compose (for lab environment)
-- Optional: a Groq API key (free at [console.groq.com](https://console.groq.com)) for AI features
+- Optional: an API key for Groq, OpenAI, Anthropic, or Google Gemini for AI features; custom OpenAI-compatible endpoints are also supported
 - Optional: Couchbase Server 7+; install Couchbase's `cbbackupmgr` CLI on the VynDB host to enable Couchbase backups
 
 ---
@@ -419,8 +419,11 @@ Set in **Settings** (in-app) or directly in `data/settings.json`:
 
 | Key | Default | Description |
 |---|---|---|
-| `groqApiKey` | — | Groq API key for AI Copilot and Query Analyzer |
-| `aiModel` | `llama-3.3-70b-versatile` | Groq model — also supports `llama-3.1-8b-instant`, `mixtral-8x7b-32768` |
+| `aiProvider` | `groq` | Provider: `groq`, `openai`, `anthropic`, `google`, or `custom` |
+| `aiModel` | `openai/gpt-oss-120b` | Model ID for the selected provider; choose a model available to that account |
+| `aiApiKey` | — | API key for the selected provider; `GROQ_API_KEY` remains a Groq fallback |
+| `aiBaseUrl` | — | Required for a custom OpenAI-compatible provider endpoint |
+| `groqApiKey` | — | Legacy Groq key retained for backward compatibility |
 | `slowQueryThresholdMs` | `1000` | Flag queries slower than N ms |
 | `replicationLagAlertSec` | `30` | Auto-raise incident when replica lags beyond N seconds |
 | `connectionPoolPctAlert` | `80` | Alert when pool usage exceeds N% |
@@ -430,8 +433,15 @@ Set in **Settings** (in-app) or directly in `data/settings.json`:
 | `defaultRefreshInterval` | `30` | Dashboard auto-refresh in seconds |
 | `timezone` | `UTC` | Display timezone |
 | `slackWebhookUrl` | — | Slack webhook URL for alert notifications |
+| `teamsWebhookUrl` | — | Microsoft Teams webhook URL |
+| `customWebhookUrl` | — | Custom alert webhook URL |
+| `notificationTeam` | — | Team or group label used for incident routing/on-call |
+| `notifyCooldownMinutes` | `30` | Duplicate-notification suppression interval; `0` disables it |
 | `alertEmailEnabled` | `false` | Enable SMTP email alerts |
 | `smtpHost` / `smtpPort` / `smtpUser` / `smtpPassword` | — | SMTP config for email notifications |
+| `smtpFrom` / `alertRecipients` | — | Email sender and comma-separated alert recipients |
+
+Settings changes require an admin account. API reads mask API keys, webhook URLs, SMTP passwords, and GraphQL tokens as `***configured***`; saving that marker preserves the existing secret. Test buttons send real requests to the configured AI provider or notification endpoint. The email test uses saved SMTP settings and is skipped unless email alerts are enabled and SMTP is configured, so save changes before testing email.
 
 ### Environment Variables (`.env.local`)
 
@@ -605,7 +615,7 @@ All endpoints require a valid session cookie (login at `/login`) or Bearer token
 | Data fetching | SWR | Auto-refresh, cache invalidation |
 | Icons | Lucide React | Consistent icon set |
 | DB integrations | pg, mysql2, mongodb, ioredis, mssql, Couchbase REST APIs | Native drivers and management APIs |
-| AI | Groq SDK | Llama 3.3 70B Versatile |
+| AI | Groq, OpenAI, Anthropic, and Google provider SDKs | Custom OpenAI-compatible endpoints also supported |
 | Auth | jose (JWT) | PBKDF2 password hashing |
 | Email | Nodemailer | SMTP with TLS |
 | Process mgr | PM2 | Cluster + cron |
@@ -631,8 +641,8 @@ Grant `VIEW SERVER STATE` to the connecting user:
 GRANT VIEW SERVER STATE TO labdb;
 ```
 
-### Copilot returns "Groq API key not configured"
-Set the key in **Settings → AI Copilot** or in `.env.local`:
+### AI Copilot reports a missing or invalid provider key
+Choose the provider and set its API key in **Settings → AI Copilot**. For Groq, `GROQ_API_KEY` in `.env.local` is also supported as a fallback:
 ```bash
 GROQ_API_KEY=gsk_your_key_here
 ```
