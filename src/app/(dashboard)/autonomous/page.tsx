@@ -90,6 +90,12 @@ export default function AutonomousPage() {
     dismissed: proposals.filter(p => p.status === 'dismissed').length,
   }
 
+  const focusStatus = (status: 'pending' | 'executed' | 'dismissed') => {
+    setTab(status)
+    setSevFilter('all')
+    document.getElementById('autonomous-proposals')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const handleApprove = async (id: string) => {
     setApprovingId(id)
     try {
@@ -122,15 +128,18 @@ export default function AutonomousPage() {
     <div className="space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {[
-          { label: 'Pending',      value: counts.pending,     color: 'text-yellow-400' },
-          { label: 'Executed',     value: counts.executed,    color: 'text-emerald-400' },
-          { label: 'Dismissed',    value: counts.dismissed,   color: 'text-slate-400' },
-        ].map(s => (
-          <div key={s.label} className="bg-slate-900/60 border border-slate-800/60 rounded-xl p-4">
-            <div className={cn('text-2xl font-bold', s.color)}>{s.value}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
-          </div>
+        {([
+          { status: 'pending', label: 'Pending', value: counts.pending, color: 'text-yellow-400' },
+          { status: 'executed', label: 'Executed', value: counts.executed, color: 'text-emerald-400' },
+          { status: 'dismissed', label: 'Dismissed', value: counts.dismissed, color: 'text-slate-400' },
+        ] as const).map(card => (
+          <button key={card.status} type="button" onClick={() => focusStatus(card.status)} aria-pressed={tab === card.status && sevFilter === 'all'}
+            aria-label={`Show ${card.value} ${card.label.toLowerCase()} proposals`}
+            className={cn('text-left bg-slate-900/60 border rounded-xl p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors', tab === card.status && sevFilter === 'all' ? 'border-emerald-500/60' : 'border-slate-800/60')}>
+            <div className={cn('text-2xl font-bold', card.color)}>{card.value}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{card.label}</div>
+            <div className="text-[10px] text-slate-600 mt-1">Show {card.label.toLowerCase()} proposals</div>
+          </button>
         ))}
       </div>
 
@@ -171,7 +180,7 @@ export default function AutonomousPage() {
       </div>
 
       {/* Proposals List */}
-      <div className="space-y-3">
+      <div id="autonomous-proposals" className="space-y-3 scroll-mt-6">
         {filtered.map(proposal => {
           const sev = SEV_CONFIG[proposal.severity]
           const risk = RISK_CONFIG[proposal.risk]

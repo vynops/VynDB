@@ -16,11 +16,17 @@ export default function SlaPage() {
   const { data: sla, mutate } = useSWR('/api/sla', fetcher)
   const [saving, setSaving] = useState(false)
   const [config, setConfig] = useState<Record<string, { ackMinutes: number; resolveMinutes: number }> | null>(null)
+  const [severityFilter, setSeverityFilter] = useState<string | null>(null)
 
   const currentSla = sla ?? {}
   const editConfig = config ?? currentSla
 
   const list = Array.isArray(incidents) ? incidents : []
+  const filteredIncidents = severityFilter ? list.filter((incident: { severity: string }) => incident.severity === severityFilter) : list
+  const selectSeverity = (severity: string) => {
+    setSeverityFilter(current => current === severity ? null : severity)
+    document.getElementById('sla-events')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   // Compute SLA achievements
   const slaStats = SEVERITIES.map(sev => {
@@ -69,7 +75,10 @@ export default function SlaPage() {
         {slaStats.map(s => {
           const hasBreaches = s.ackBreaches + s.resolveBreaches > 0
           return (
-            <div key={s.sev} className={cn('rounded-2xl border p-4', hasBreaches ? 'bg-red-500/3 border-red-500/20' : 'bg-[#0f1629] border-slate-800')}>
+            <button key={s.sev} type="button" onClick={() => selectSeverity(s.sev)} aria-pressed={severityFilter === s.sev}
+              aria-label={`Show ${s.total} ${s.sev} severity incidents`}
+              className={cn('w-full text-left rounded-2xl border p-4 cursor-pointer hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors',
+                severityFilter === s.sev ? 'bg-slate-700 border-emerald-500/60' : hasBreaches ? 'bg-red-500/3 border-red-500/20' : 'bg-[#0f1629] border-slate-800')}>
               <div className={cn('text-xs font-bold uppercase mb-2',
                 s.sev === 'critical' ? 'text-red-400' : s.sev === 'high' ? 'text-orange-400' : s.sev === 'medium' ? 'text-yellow-400' : 'text-blue-400')}>
                 {s.sev}
@@ -83,7 +92,8 @@ export default function SlaPage() {
               <div className="text-[10px] text-slate-500">{s.total} incidents</div>
               {hasBreaches && <div className="text-[10px] text-red-400 mt-1">{s.ackBreaches} ack · {s.resolveBreaches} resolve breaches</div>}
               <div className="text-[10px] text-slate-600 mt-1">Ack ≤{s.target.ackMinutes}m · Resolve ≤{Math.round(s.target.resolveMinutes / 60 * 10) / 10}h</div>
-            </div>
+              <div className="text-[10px] text-slate-600 mt-1">{severityFilter === s.sev ? 'Show all severities' : 'View SLA events'}</div>
+            </button>
           )
         })}
       </div>
@@ -131,12 +141,18 @@ export default function SlaPage() {
       </div>
 
       {/* Recent SLA events */}
-      <div className="rounded-2xl bg-[#0f1629] border border-slate-800 overflow-hidden">
+      <div id="sla-events" className="rounded-2xl bg-[#0f1629] border border-slate-800 overflow-hidden scroll-mt-6">
         <div className="px-5 py-4 border-b border-slate-800">
-          <h3 className="text-sm font-bold text-white">Recent Incident SLA Events</h3>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-white">Recent Incident SLA Events</h3>
+              <p className="text-xs text-slate-500">{severityFilter ? `${filteredIncidents.length} ${severityFilter} incidents` : `${list.length} incidents`}</p>
+            </div>
+            {severityFilter && <button type="button" onClick={() => setSeverityFilter(null)} className="text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors">Clear filter</button>}
+          </div>
         </div>
         <div className="divide-y divide-slate-800/60">
-          {list.slice(0, 8).map((inc: { id: string; title: string; severity: string; status: string; createdAt: string; acknowledgedAt?: string; resolvedAt?: string }) => {
+          {filteredIncidents.slice(0, 8).map((inc: { id: string; title: string; severity: string; status: string; createdAt: string; acknowledgedAt?: string; resolvedAt?: string }) => {
             const target = currentSla[inc.severity] ?? { ackMinutes: 30, resolveMinutes: 240 }
             const ackMin = inc.acknowledgedAt ? (new Date(inc.acknowledgedAt).getTime() - new Date(inc.createdAt).getTime()) / 60000 : null
             const resolveMin = inc.resolvedAt ? (new Date(inc.resolvedAt).getTime() - new Date(inc.createdAt).getTime()) / 60000 : null
@@ -161,6 +177,7 @@ export default function SlaPage() {
               </div>
             )
           })}
+          {filteredIncidents.length === 0 && <div className="px-5 py-6 text-sm text-slate-400">No incidents match this severity.</div>}
         </div>
       </div>
     </div>

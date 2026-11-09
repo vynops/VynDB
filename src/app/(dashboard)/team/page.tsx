@@ -25,6 +25,12 @@ export default function TeamPage() {
   const { data: users, mutate } = useSWR('/api/team', fetcher)
   const { data: me } = useSWR('/api/auth/me', fetcher)
   const list: User[] = Array.isArray(users) ? users : []
+  const [roleFilter, setRoleFilter] = useState<string | null>(null)
+  const filteredUsers = roleFilter ? list.filter(user => user.role === roleFilter) : list
+  const selectRole = (role: string) => {
+    setRoleFilter(current => current === role ? null : role)
+    document.getElementById('team-members')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const [showModal, setShowModal] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -81,31 +87,41 @@ export default function TeamPage() {
 
       {/* Role permissions */}
       <div className="grid sm:grid-cols-3 gap-3">
-        {Object.entries(ROLE_DESC).map(([role, desc]) => (
-          <div key={role} className="rounded-2xl bg-[#0f1629] border border-slate-800 p-4">
-            <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full uppercase', ROLE_COLOR[role])}>{role}</span>
-            <p className="text-xs text-slate-400 mt-2 leading-relaxed">{desc}</p>
-          </div>
-        ))}
+        {Object.entries(ROLE_DESC).map(([role, desc]) => {
+          const active = roleFilter === role
+          const count = list.filter(user => user.role === role).length
+          return (
+            <button key={role} type="button" onClick={() => selectRole(role)} aria-pressed={active}
+              aria-label={`Filter to ${count} ${role} team members`}
+              className={cn('text-left rounded-2xl border p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors', active ? 'bg-slate-700 border-emerald-500/60' : 'bg-[#0f1629] border-slate-800')}>
+              <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full uppercase', ROLE_COLOR[role])}>{role}</span>
+              <p className="text-xs text-slate-400 mt-2 leading-relaxed">{desc}</p>
+              <div className="text-[10px] text-slate-600 mt-2">{count} members · {active ? 'Show all members' : 'Filter members'}</div>
+            </button>
+          )
+        })}
       </div>
 
       {/* Users table */}
-      <div className="rounded-2xl bg-[#0f1629] border border-slate-800 overflow-hidden">
+      <div id="team-members" className="rounded-2xl bg-[#0f1629] border border-slate-800 overflow-hidden scroll-mt-6">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <div>
             <h2 className="text-sm font-bold text-white flex items-center gap-2"><Users className="w-4 h-4 text-emerald-400" /> Team Members</h2>
-            <p className="text-xs text-slate-500">{list.length} users</p>
+            <p className="text-xs text-slate-500">{roleFilter ? `${filteredUsers.length} of ${list.length} users · ${roleFilter}` : `${list.length} users`}</p>
           </div>
-          {me?.role === 'admin' && (
-            <button onClick={openAdd}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-xs transition-colors">
-              <Plus size={13} /> Add User
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {roleFilter && <button type="button" onClick={() => setRoleFilter(null)} className="text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors">Clear filter</button>}
+            {me?.role === 'admin' && (
+              <button onClick={openAdd}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-xs transition-colors">
+                <Plus size={13} /> Add User
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="divide-y divide-slate-800/60">
-          {list.map(user => (
+          {filteredUsers.map(user => (
             <div key={user.id} className="flex items-center gap-3 px-5 py-4">
               <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
                 <span className="text-emerald-400 text-sm font-black">{user.name.charAt(0).toUpperCase()}</span>
@@ -139,6 +155,7 @@ export default function TeamPage() {
               )}
             </div>
           ))}
+          {filteredUsers.length === 0 && <div className="px-5 py-8 text-sm text-slate-500">{roleFilter ? `No ${roleFilter} team members.` : 'No team members found.'}</div>}
         </div>
       </div>
 

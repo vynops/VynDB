@@ -129,6 +129,17 @@ export default function BackupsPage() {
     } finally { setRunning(false) }
   }
 
+  const showBackupStatus = (status: string) => {
+    setPageTab('jobs')
+    setStatusFilter(status)
+    document.getElementById('backup-jobs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const showStorageDetails = () => {
+    setPageTab('jobs')
+    document.getElementById('backup-storage')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this backup record and file from disk?')) return
     setDeletingId(id)
@@ -298,22 +309,34 @@ export default function BackupsPage() {
       {pageTab === 'jobs' && (<>
       {/* Stats Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {[
-          { label: 'Succeeded',  value: stats.succeeded, color: 'text-emerald-400' },
-          { label: 'Failed',     value: stats.failed,    color: stats.failed > 0 ? 'text-red-400' : 'text-slate-500' },
-          { label: 'Running',    value: stats.running,   color: 'text-blue-400' },
-          { label: 'Total Jobs', value: list.length,     color: 'text-white' },
-          { label: 'Record Size', value: stats.totalMB >= 1024 ? `${(stats.totalMB/1024).toFixed(1)} GB` : `${stats.totalMB} MB`, color: 'text-slate-300' },
-        ].map(s => (
-          <div key={s.label} className="bg-slate-900/60 border border-slate-800/60 rounded-xl p-4">
-            <div className={cn('text-xl font-bold', s.color)}>{s.value}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
-          </div>
-        ))}
+        <button type="button" onClick={() => showBackupStatus('succeeded')} aria-pressed={statusFilter === 'succeeded'}
+          aria-label={`Show ${stats.succeeded} succeeded backup jobs`}
+          className={cn('text-left bg-slate-900/60 border rounded-xl p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors', statusFilter === 'succeeded' ? 'border-emerald-500/60' : 'border-slate-800/60')}>
+          <div className="text-xl font-bold text-emerald-400">{stats.succeeded}</div><div className="text-xs text-slate-500 mt-0.5">Succeeded</div><div className="text-[10px] text-slate-600 mt-1">Show successful jobs</div>
+        </button>
+        <button type="button" onClick={() => showBackupStatus('failed')} aria-pressed={statusFilter === 'failed'}
+          aria-label={`Show ${stats.failed} failed backup jobs`}
+          className={cn('text-left bg-slate-900/60 border rounded-xl p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors', statusFilter === 'failed' ? 'border-red-500/60' : 'border-slate-800/60')}>
+          <div className={cn('text-xl font-bold', stats.failed > 0 ? 'text-red-400' : 'text-slate-500')}>{stats.failed}</div><div className="text-xs text-slate-500 mt-0.5">Failed</div><div className="text-[10px] text-slate-600 mt-1">Show failed jobs</div>
+        </button>
+        <button type="button" onClick={() => showBackupStatus('running')} aria-pressed={statusFilter === 'running'}
+          aria-label={`Show ${stats.running} running backup jobs`}
+          className={cn('text-left bg-slate-900/60 border rounded-xl p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors', statusFilter === 'running' ? 'border-blue-500/60' : 'border-slate-800/60')}>
+          <div className="text-xl font-bold text-blue-400">{stats.running}</div><div className="text-xs text-slate-500 mt-0.5">Running</div><div className="text-[10px] text-slate-600 mt-1">Show active jobs</div>
+        </button>
+        <button type="button" onClick={() => showBackupStatus('all')} aria-pressed={statusFilter === 'all'}
+          aria-label={`Show all ${list.length} backup jobs`}
+          className={cn('text-left bg-slate-900/60 border rounded-xl p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors', statusFilter === 'all' ? 'border-slate-500' : 'border-slate-800/60')}>
+          <div className="text-xl font-bold text-white">{list.length}</div><div className="text-xs text-slate-500 mt-0.5">Total Jobs</div><div className="text-[10px] text-slate-600 mt-1">Show all jobs</div>
+        </button>
+        <button type="button" onClick={showStorageDetails} aria-label="View backup storage details"
+          className="text-left bg-slate-900/60 border border-slate-800/60 rounded-xl p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors">
+          <div className="text-xl font-bold text-slate-300">{stats.totalMB >= 1024 ? `${(stats.totalMB/1024).toFixed(1)} GB` : `${stats.totalMB} MB`}</div><div className="text-xs text-slate-500 mt-0.5">Record Size</div><div className="text-[10px] text-slate-600 mt-1">View disk usage</div>
+        </button>
       </div>
 
       {/* Storage + Controls */}
-      <div className="bg-slate-900/60 border border-slate-800/60 rounded-xl p-4 space-y-3">
+      <div id="backup-storage" className="bg-slate-900/60 border border-slate-800/60 rounded-xl p-4 space-y-3 scroll-mt-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-4 text-xs text-slate-400 flex-wrap">
             <span className="flex items-center gap-1.5">
@@ -350,14 +373,14 @@ export default function BackupsPage() {
       </div>
 
       {/* Backup Jobs Table */}
-      <div className="bg-slate-900/60 border border-slate-800/60 rounded-xl overflow-hidden">
+      <div id="backup-jobs" className="bg-slate-900/60 border border-slate-800/60 rounded-xl overflow-hidden scroll-mt-6">
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800/60">
           <div>
             <h2 className="text-sm font-bold text-white">Backup Jobs</h2>
             <p className="text-xs text-slate-500">{list.length} records</p>
           </div>
           <div className="flex gap-1">
-            {['all','succeeded','failed','scheduled'].map(s => (
+            {['all','succeeded','failed','running','scheduled'].map(s => (
               <button key={s} onClick={() => setStatusFilter(s)}
                 className={cn('px-2 py-1 rounded text-[10px] font-medium capitalize transition-colors',
                   statusFilter === s ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300')}>

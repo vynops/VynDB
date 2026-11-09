@@ -40,44 +40,60 @@ export default function ReplicationPage() {
   const { data: replication } = useSWR('/api/replication', fetcher, { refreshInterval })
   const list = Array.isArray(replication) ? replication as ReplNode[] : []
   const [selected, setSelected] = useState<ReplNode | null>(null)
+  const [filterStatus, setFilterStatus] = useState<'healthy' | 'warning' | 'critical' | null>(null)
 
-  const healthy = list.filter((r: { status: string }) => r.status === 'healthy').length
-  const warning = list.filter((r: { status: string }) => r.status === 'warning').length
-  const critical = list.filter((r: { status: string }) => r.status === 'critical').length
+  const healthy = list.filter(replica => replica.status === 'healthy').length
+  const warning = list.filter(replica => replica.status === 'warning').length
+  const critical = list.filter(replica => replica.status === 'critical').length
+  const filteredList = filterStatus ? list.filter(replica => replica.status === filterStatus) : list
+  const statusCards = [
+    { status: 'healthy' as const, label: 'Healthy', value: healthy, icon: CheckCircle, color: 'text-emerald-400' },
+    { status: 'warning' as const, label: 'Warning', value: warning, icon: AlertTriangle, color: 'text-yellow-400' },
+    { status: 'critical' as const, label: 'Critical', value: critical, icon: Activity, color: 'text-red-400' },
+  ]
+  const selectStatus = (status: 'healthy' | 'warning' | 'critical') => {
+    setFilterStatus(current => current === status ? null : status)
+    document.getElementById('replication-status')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-2xl bg-[#0f1629] border border-slate-800 p-4">
-          <CheckCircle className="w-5 h-5 text-emerald-400 mb-2" />
-          <div className="text-xl font-black text-emerald-400">{healthy}</div>
-          <div className="text-xs text-slate-500">Healthy</div>
-        </div>
-        <div className="rounded-2xl bg-[#0f1629] border border-slate-800 p-4">
-          <AlertTriangle className="w-5 h-5 text-yellow-400 mb-2" />
-          <div className="text-xl font-black text-yellow-400">{warning}</div>
-          <div className="text-xs text-slate-500">Warning</div>
-        </div>
-        <div className="rounded-2xl bg-[#0f1629] border border-slate-800 p-4">
-          <Activity className="w-5 h-5 text-red-400 mb-2" />
-          <div className="text-xl font-black text-red-400">{critical}</div>
-          <div className="text-xs text-slate-500">Critical</div>
-        </div>
+        {statusCards.map(card => {
+          const Icon = card.icon
+          const active = filterStatus === card.status
+          return (
+            <button key={card.status} type="button" onClick={() => selectStatus(card.status)} aria-pressed={active}
+              aria-label={`${active ? 'Clear' : 'Filter to'} ${card.value} ${card.label.toLowerCase()} replication nodes`}
+              className={cn('text-left rounded-2xl border p-4 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors',
+                active ? 'bg-slate-700 border-slate-500' : 'bg-[#0f1629] border-slate-800 hover:border-slate-600')}>
+              <Icon className={cn('w-5 h-5 mb-2', card.color)} />
+              <div className={cn('text-xl font-black', card.color)}>{card.value}</div>
+              <div className="text-xs text-slate-500">{card.label}</div>
+              <div className="text-[10px] text-slate-600 mt-1">{active ? 'Show all nodes' : 'Filter table'}</div>
+            </button>
+          )
+        })}
       </div>
 
       {/* Replication table */}
-      <div className="rounded-2xl bg-[#0f1629] border border-slate-800 overflow-hidden">
+      <div id="replication-status" className="rounded-2xl bg-[#0f1629] border border-slate-800 overflow-hidden scroll-mt-6">
         <div className="px-5 py-4 border-b border-slate-800">
-          <h2 className="text-sm font-bold text-white">Replication Status</h2>
-          <p className="text-xs text-slate-500">{list.length} nodes monitored</p>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-white">Replication Status</h2>
+              <p className="text-xs text-slate-500">{filterStatus ? `${filteredList.length} of ${list.length} nodes · ${filterStatus}` : `${list.length} nodes monitored`}</p>
+            </div>
+            {filterStatus && <button type="button" onClick={() => setFilterStatus(null)} className="text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors">Clear filter</button>}
+          </div>
         </div>
         <div className="divide-y divide-slate-800/60">
-          {list.length === 0 && (
+          {filteredList.length === 0 && (
             <div className="px-5 py-6 text-sm text-slate-400">No current replication readings. Check database status and the collector; this does not confirm replication health.</div>
           )}
-          {list.map((r) => (
+          {filteredList.map((r) => (
             <div key={r.dbId} onClick={() => setSelected(r)}
               className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 cursor-pointer hover:bg-slate-800/30 transition-colors">
               <div className="flex items-center gap-3 flex-1 min-w-0">

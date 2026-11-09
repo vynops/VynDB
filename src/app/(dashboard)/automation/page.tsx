@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import {
   Play, Plus, Trash2, ToggleLeft, ToggleRight, Clock, Zap, AlertTriangle,
@@ -151,16 +151,44 @@ export default function AutomationPage() {
   const [runningId, setRunningId] = useState<string | null>(null)
   const [confirmRun, setConfirmRun] = useState<AutomationRule | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [ruleScope, setRuleScope] = useState<'all' | 'active-alerts'>('all')
+  const [runFocus, setRunFocus] = useState<'today' | 'failed' | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [runOutput, setRunOutput] = useState<{ id: string; output: string } | null>(null)
   const [dryRunOutput, setDryRunOutput] = useState<{ id: string; output: string } | null>(null)
 
+  const isActiveAlertRule = (rule: AutomationRule) => rule.enabled && rule.trigger === 'threshold' && rule.actions.length > 0 &&
+    rule.actions.every(action => action.type === 'slack_notify' || action.type === 'email_notify') &&
+    (rule.dbId === '*' || dbs.some(db => db.id === rule.dbId))
+  const activeAlertRules = rules.filter(isActiveAlertRule)
+  const visibleRules = ruleScope === 'active-alerts' ? activeAlertRules : rules
   const stats = {
     total: rules.length,
-    enabled: rules.filter(r => r.enabled && r.trigger === 'threshold' && r.actions.length > 0 && r.actions.every(action => action.type === 'slack_notify' || action.type === 'email_notify') && (r.dbId === '*' || dbs.some(db => db.id === r.dbId))).length,
+    enabled: activeAlertRules.length,
     runsToday: runs.filter(r => new Date(r.startedAt).toDateString() === new Date().toDateString()).length,
     failed: runs.filter(r => r.status === 'failed' && new Date(r.startedAt) > new Date(Date.now() - 86400000)).length,
+  }
+  const activityRuns = runFocus === 'today'
+    ? runs.filter(run => new Date(run.startedAt).toDateString() === new Date().toDateString())
+    : runFocus === 'failed'
+      ? runs.filter(run => run.status === 'failed' && new Date(run.startedAt) > new Date(Date.now() - 86400000))
+      : []
+  const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+  useEffect(() => {
+    if (runFocus) scrollTo('automation-run-activity')
+  }, [runFocus])
+
+  const showRules = (scope: 'all' | 'active-alerts') => {
+    setRuleScope(scope)
+    setRunFocus(null)
+    scrollTo('automation-rules')
+  }
+
+  const showRuns = (focus: 'today' | 'failed') => {
+    setRuleScope('all')
+    setRunFocus(focus)
   }
 
   const handleSave = async () => {
@@ -236,18 +264,44 @@ export default function AutomationPage() {
     <div className="space-y-6">
       {/* Stats Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Total Rules', value: stats.total, color: 'text-white' },
-          { label: 'Active alert rules', value: stats.enabled, color: 'text-emerald-400' },
-          { label: 'Runs Today', value: stats.runsToday, color: 'text-blue-400' },
-          { label: 'Failed (24h)', value: stats.failed, color: stats.failed > 0 ? 'text-red-400' : 'text-slate-400' },
-        ].map(s => (
-          <div key={s.label} className="bg-slate-900/60 border border-slate-800/60 rounded-xl p-4">
-            <div className={cn('text-2xl font-bold', s.color)}>{s.value}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
-          </div>
-        ))}
+        <button type="button" onClick={() => showRules('all')} aria-label={`Show all ${stats.total} automation rules`} aria-pressed={ruleScope === 'all' && !runFocus}
+          className={cn('text-left bg-slate-900/60 border rounded-xl p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors', ruleScope === 'all' && !runFocus ? 'border-emerald-500/60' : 'border-slate-800/60')}>
+          <div className="text-2xl font-bold text-white">{stats.total}</div><div className="text-xs text-slate-500 mt-0.5">Total Rules</div><div className="text-[10px] text-slate-600 mt-1">Show all rules</div>
+        </button>
+        <button type="button" onClick={() => showRules('active-alerts')} aria-label={`Show ${stats.enabled} active alert rules`} aria-pressed={ruleScope === 'active-alerts' && !runFocus}
+          className={cn('text-left bg-slate-900/60 border rounded-xl p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors', ruleScope === 'active-alerts' && !runFocus ? 'border-emerald-500/60' : 'border-slate-800/60')}>
+          <div className="text-2xl font-bold text-emerald-400">{stats.enabled}</div><div className="text-xs text-slate-500 mt-0.5">Active alert rules</div><div className="text-[10px] text-slate-600 mt-1">Show active rules</div>
+        </button>
+        <button type="button" onClick={() => showRuns('today')} aria-label={`Show ${stats.runsToday} automation runs today`} aria-pressed={runFocus === 'today'}
+          className={cn('text-left bg-slate-900/60 border rounded-xl p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors', runFocus === 'today' ? 'border-blue-500/60' : 'border-slate-800/60')}>
+          <div className="text-2xl font-bold text-blue-400">{stats.runsToday}</div><div className="text-xs text-slate-500 mt-0.5">Runs Today</div><div className="text-[10px] text-slate-600 mt-1">View run details</div>
+        </button>
+        <button type="button" onClick={() => showRuns('failed')} aria-label={`Show ${stats.failed} failed automation runs in the last 24 hours`} aria-pressed={runFocus === 'failed'}
+          className={cn('text-left bg-slate-900/60 border rounded-xl p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors', runFocus === 'failed' ? 'border-red-500/60' : 'border-slate-800/60')}>
+          <div className={cn('text-2xl font-bold', stats.failed > 0 ? 'text-red-400' : 'text-slate-400')}>{stats.failed}</div><div className="text-xs text-slate-500 mt-0.5">Failed (24h)</div><div className="text-[10px] text-slate-600 mt-1">View failed runs</div>
+        </button>
       </div>
+
+      {runFocus && (
+        <div id="automation-run-activity" className="scroll-mt-6 rounded-xl bg-slate-900/60 border border-slate-800/60 overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800/60">
+            <div><h2 className="text-sm font-bold text-white">{runFocus === 'today' ? 'Runs Today' : 'Failed Runs (24h)'}</h2><p className="text-xs text-slate-500">{activityRuns.length} run records</p></div>
+            <button type="button" onClick={() => setRunFocus(null)} className="text-xs text-slate-400 hover:text-white">Clear</button>
+          </div>
+          {activityRuns.length ? <div className="divide-y divide-slate-800/60">
+            {activityRuns.map(run => (
+              <details key={run.id} className="group px-4 py-3">
+                <summary className="flex cursor-pointer list-none items-start gap-3">
+                  <StatusBadge status={run.status} />
+                  <span className="flex-1 min-w-0"><span className="block text-xs font-medium text-slate-200">{rules.find(rule => rule.id === run.ruleId)?.name ?? run.ruleId}</span><span className="block text-[10px] text-slate-500 mt-0.5">{timeAgo(run.startedAt)} · via {run.triggeredBy}</span></span>
+                  <ChevronDown size={13} className="text-slate-500 transition-transform group-open:rotate-180" />
+                </summary>
+                <pre className="mt-3 ml-1 whitespace-pre-wrap break-words text-[11px] text-slate-400 font-mono">{run.output || '(no output)'}</pre>
+              </details>
+            ))}
+          </div> : <div className="px-4 py-6 text-sm text-slate-500">No matching automation runs.</div>}
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex justify-end">
@@ -259,8 +313,8 @@ export default function AutomationPage() {
       </div>
 
       {/* Rules List */}
-      <div className="space-y-2">
-        {rules.map(rule => {
+      <div id="automation-rules" className="space-y-2 scroll-mt-6">
+        {visibleRules.map(rule => {
           const isExpanded = expandedId === rule.id
           const isRunning = runningId === rule.id
           const primaryAction = rule.actions[0]
@@ -381,10 +435,10 @@ export default function AutomationPage() {
           )
         })}
 
-        {rules.length === 0 && (
+        {visibleRules.length === 0 && (
           <div className="text-center py-16 text-slate-500">
             <Terminal className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">No automation rules yet. Create one to get started.</p>
+            <p className="text-sm">{rules.length === 0 ? 'No automation rules yet. Create one to get started.' : 'No active alert rules match this view.'}</p>
           </div>
         )}
       </div>
