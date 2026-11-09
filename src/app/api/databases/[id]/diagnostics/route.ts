@@ -26,8 +26,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       const pool = await getPgPool(db)
       if (!pool) return NextResponse.json({ error: 'Cannot connect to database' }, { status: 503 })
       const [activity, locks, deadlocks] = await Promise.all([
-        pool.query(`SELECT pid, usename, state, wait_event_type, wait_event, now() - query_start AS query_age, left(query, 500) AS query
-          FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() ORDER BY query_start ASC NULLS LAST LIMIT 100`),
+        pool.query(`SELECT pid, usename, state, wait_event_type, wait_event, clock_timestamp() - query_start AS query_age, left(query, 500) AS query
+          FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()
+          AND state = 'active' AND wait_event_type IS NOT NULL AND wait_event_type <> 'Client'
+          ORDER BY query_start ASC NULLS LAST LIMIT 100`),
         pool.query(`SELECT blocked.pid AS blocked_pid, blocking.pid AS blocking_pid, blocked.query AS blocked_query, blocking.query AS blocking_query
           FROM pg_stat_activity blocked JOIN pg_locks blocked_lock ON blocked_lock.pid = blocked.pid AND NOT blocked_lock.granted
           JOIN pg_locks blocking_lock ON blocking_lock.locktype = blocked_lock.locktype AND blocking_lock.database IS NOT DISTINCT FROM blocked_lock.database

@@ -7,11 +7,14 @@ export async function GET(req: NextRequest) {
   const auth = await requireRole(req, 'viewer')
   if (auth instanceof NextResponse) return auth
   const s = getSettings()
-  // Don't expose the raw API keys in viewer-level calls
+  const secretKeys = [
+    'aiApiKey', 'groqApiKey', 'slackWebhookUrl', 'teamsWebhookUrl', 'customWebhookUrl',
+    'smtpPassword', 'graphqlAuthToken',
+  ] as const
+  const maskedSecrets = Object.fromEntries(secretKeys.map(key => [key, s[key] ? '***configured***' : '']))
   return NextResponse.json({
     ...s,
-    aiApiKey: s.aiApiKey ? '***configured***' : '',
-    groqApiKey: s.groqApiKey ? '***configured***' : '',
+    ...maskedSecrets,
   })
 }
 
@@ -33,17 +36,17 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: `${key} must be a number between ${limits.min} and ${limits.max}` }, { status: 400 })
     }
   }
-  // If caller sends '***configured***' back, keep existing keys
-  if (body.aiApiKey === '***configured***') {
-    const existing = getSettings()
-    body.aiApiKey = existing.aiApiKey
-  }
-  if (body.groqApiKey === '***configured***') {
-    const existing = getSettings()
-    body.groqApiKey = existing.groqApiKey
+  const keepAiApiKey = body.aiApiKey === '***configured***'
+  const existing = getSettings()
+  const secretKeys = [
+    'aiApiKey', 'groqApiKey', 'slackWebhookUrl', 'teamsWebhookUrl', 'customWebhookUrl',
+    'smtpPassword', 'graphqlAuthToken',
+  ] as const
+  for (const key of secretKeys) {
+    if (body[key] === '***configured***') body[key] = existing[key]
   }
   // For backward compatibility: if aiApiKey is set, update groqApiKey too
-  if (body.aiProvider === 'groq' && body.aiApiKey && body.aiApiKey !== '***configured***') {
+  if (body.aiProvider === 'groq' && body.aiApiKey && !keepAiApiKey) {
     body.groqApiKey = body.aiApiKey
   }
   saveSettings(body)

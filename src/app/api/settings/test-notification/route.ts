@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth'
+import { getSettings } from '@/lib/settings-store'
 
 export async function POST(req: NextRequest) {
   try {
     const auth = await requireRole(req, 'admin')
     if (auth instanceof NextResponse) return auth
 
-    const { channel, url } = await req.json() as { channel: string; url: string }
-    if (!channel || !url) return NextResponse.json({ ok: false, message: 'Missing channel or URL' }, { status: 400 })
+    const { channel, url: requestedUrl } = await req.json() as { channel?: string; url?: string }
+    if (!channel) return NextResponse.json({ ok: false, message: 'Missing channel' }, { status: 400 })
+    const configuredUrls = {
+      slackWebhookUrl: getSettings().slackWebhookUrl,
+      teamsWebhookUrl: getSettings().teamsWebhookUrl,
+      customWebhookUrl: getSettings().customWebhookUrl,
+    }
+    if (!Object.hasOwn(configuredUrls, channel)) return NextResponse.json({ ok: false, message: `Unknown channel: ${channel}` }, { status: 400 })
+    const url = requestedUrl === '***configured***'
+      ? configuredUrls[channel as keyof typeof configuredUrls]
+      : requestedUrl
+    if (!url) return NextResponse.json({ ok: false, message: 'Missing channel URL' }, { status: 400 })
 
     const parsedUrl = new URL(url)
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
@@ -38,9 +49,7 @@ export async function POST(req: NextRequest) {
         timestamp: new Date().toISOString(),
         source: 'vyndb/settings',
       }
-    } else {
-      return NextResponse.json({ ok: false, message: `Unknown channel: ${channel}` }, { status: 400 })
-    }
+    } else return NextResponse.json({ ok: false, message: `Unknown channel: ${channel}` }, { status: 400 })
 
     const res = await fetch(url, {
       method: 'POST',

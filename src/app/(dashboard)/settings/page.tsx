@@ -101,22 +101,25 @@ export default function SettingsPage() {
   const handleSave = async () => {
     if (!form) return
     setSaving(true)
-    const response = await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    })
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({})) as { error?: string }
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as { error?: string }
+        throw new Error(data.error ?? 'Settings could not be saved')
+      }
+      await mutate()
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (error) {
       setSaved(false)
+      window.alert(error instanceof Error ? error.message : 'Settings could not be saved')
+    } finally {
       setSaving(false)
-      window.alert(data.error ?? 'Settings could not be saved')
-      return
     }
-    mutate()
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
   }
 
   const sendTestEmail = async () => {

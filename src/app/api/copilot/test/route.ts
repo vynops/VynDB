@@ -37,18 +37,18 @@ export async function POST(req: NextRequest) {
           break
 
         case 'openai':
-          testOk = await testOpenAi(apiKey, model)
-          testMessage = testOk ? `Connected to OpenAI (${model})` : 'Failed to connect to OpenAI'
+          testOk = await testOpenAi(apiKey, effectiveModel)
+          testMessage = testOk ? `Connected to OpenAI (${effectiveModel})` : `OpenAI key or model is unavailable (${effectiveModel})`
           break
 
         case 'anthropic':
-          testOk = await testAnthropic(apiKey, model)
-          testMessage = testOk ? `Connected to Anthropic (${model})` : 'Failed to connect to Anthropic'
+          testOk = await testAnthropic(apiKey)
+          testMessage = testOk ? `Connected to Anthropic (${effectiveModel})` : 'Anthropic authentication failed'
           break
 
         case 'google':
-          testOk = await testGoogle(apiKey, model)
-          testMessage = testOk ? `Connected to Google Gemini (${model})` : 'Failed to connect to Google'
+          testOk = await testGoogle(apiKey, effectiveModel)
+          testMessage = testOk ? `Connected to Google Gemini (${effectiveModel})` : `Google key or model is unavailable (${effectiveModel})`
           break
 
         case 'custom':
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
               { status: 400 }
             )
           }
-          testOk = await testCustom(apiKey, model, baseUrl)
-          testMessage = testOk ? `Connected to custom endpoint (${model})` : 'Failed to connect to custom endpoint'
+          testOk = await testCustom(apiKey, effectiveModel, baseUrl)
+          testMessage = testOk ? `Connected to custom endpoint (${effectiveModel})` : 'Custom endpoint rejected the configured credentials or model'
           break
 
         default:
@@ -104,17 +104,19 @@ async function testOpenAi(apiKey: string, model: string): Promise<boolean> {
   const res = await fetch('https://api.openai.com/v1/models', {
     headers: { Authorization: `Bearer ${apiKey}` },
   })
-  return res.ok
+  if (!res.ok) return false
+  const data = await res.json() as { data?: Array<{ id?: string }> }
+  return Boolean(data.data?.some(item => item.id === model))
 }
 
-async function testAnthropic(apiKey: string, model: string): Promise<boolean> {
+async function testAnthropic(apiKey: string): Promise<boolean> {
   const res = await fetch('https://api.anthropic.com/v1/models', {
     headers: {
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
   })
-  return res.ok || res.status === 401 // 401 means API key auth failed but endpoint exists
+  return res.ok
 }
 
 async function testGoogle(apiKey: string, model: string): Promise<boolean> {
@@ -128,9 +130,7 @@ async function testGoogle(apiKey: string, model: string): Promise<boolean> {
       }),
     }
   )
-  // 400 or similar means auth works but request is invalid (which is fine for test)
-  // 403 or 401 means auth failed
-  return res.ok || (res.status >= 400 && res.status < 500)
+  return res.ok
 }
 
 async function testCustom(
@@ -142,5 +142,5 @@ async function testCustom(
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${apiKey}` },
   })
-  return res.ok || res.status === 401 // 401 means endpoint exists but auth failed
+  return res.ok
 }

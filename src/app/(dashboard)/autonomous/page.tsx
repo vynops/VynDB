@@ -135,11 +135,7 @@ export default function AutonomousPage() {
       </div>
 
       {/* Header + approval gate status */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-white">Autonomous Ops</h2>
-          <p className="text-sm text-slate-400 mt-0.5">AI-detected issues with proposed self-healing actions</p>
-        </div>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-end">
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl border bg-emerald-500/10 border-emerald-500/20 text-emerald-400 text-xs font-medium">
           <Shield size={15} /> Approval gate active · no global auto-execution
         </div>

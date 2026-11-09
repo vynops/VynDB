@@ -638,14 +638,7 @@ GROQ_API_KEY=gsk_your_key_here
 ```
 
 ### Backups failing for MongoDB
-The backup runner uses a `backup` user with password `backup123`. Create it if missing:
-```javascript
-// In mongosh as admin:
-db.getSiblingDB('labdb').createUser({
-  user: 'backup', pwd: 'backup123',
-  roles: [{ role: 'read', db: 'labdb' }]
-})
-```
+The backup runner authenticates using the credentials saved for that MongoDB connection. Confirm the account has read access to the target database and that its authentication database matches the connection (`admin` for the `admin` user, otherwise the target database). Test the connection, then retry the backup.
 
 ### Disk critical incidents keep re-raising
 This is normal if your lab database host has real low disk space. The monitor only raises disk incidents for MongoDB and Redis (which expose real filesystem free space). PostgreSQL and MySQL disk alerts require real OS-level free space data not available via SQL.

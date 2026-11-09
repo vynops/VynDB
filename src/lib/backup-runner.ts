@@ -44,6 +44,10 @@ function safeId(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_')
 }
 
+function shellQuote(value: string): string {
+  return "'" + value.split("'").join("'\\''") + "'"
+}
+
 function couchbaseArchiveDir(db: DbConnection, targetDir: string): string {
   return path.join(targetDir, 'couchbase', safeId(db.id))
 }
@@ -215,13 +219,14 @@ export async function runBackup(db: DbConnection, backupType: BackupType = 'full
       // ── MongoDB ───────────────────────────────────────────────────────────
       case 'mongodb': {
         backupFile = path.join(targetDir, `mongo-${db.name}-${ts}.archive.gz`)
-        const encodedPass = encodeURIComponent(db.passwordEnc)
-        // Use dedicated backup user (simple password, no special chars — avoids shell quoting issues)
-        // The 'backup' user is created during lab setup with read-only access
+        const authSource = db.username === 'admin' ? 'admin' : db.database
+        const authFlags = db.username
+          ? `-u ${shellQuote(db.username)} -p ${shellQuote(db.passwordEnc)} --authenticationDatabase ${shellQuote(authSource)} `
+          : ''
         dockerExec(
-          `docker exec ${container} mongodump -u backup -p backup123 ` +
-          `--host 127.0.0.1 --port 27017 --db ${db.database} --authenticationDatabase ${db.database} ` +
-          `--archive --gzip > '${backupFile}'`
+          `docker exec ${container} mongodump ${authFlags}` +
+          `--host 127.0.0.1 --port 27017 --db ${shellQuote(db.database)} ` +
+          `--archive --gzip > ${shellQuote(backupFile)}`
         )
         sizeMB = fileSizeMB(backupFile)
         break

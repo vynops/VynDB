@@ -15,6 +15,20 @@ const SEV_COLOR: Record<string, string> = {
   low:      'text-blue-400 bg-blue-500/10',
 }
 
+type SlowQuery = {
+  id: string
+  dbId: string
+  query: string
+  durationMs: number
+  dbName: string
+  engine: string
+  executedAt: string
+  analyzed: boolean
+  rowsExamined?: number
+  rowsReturned?: number
+  aiAnalysis?: { explanation: string; bottleneck: string; suggestions: string[]; estimatedGain: string; indexSuggestions: string[]; confidence: number }
+}
+
 function DurationBadge({ ms }: { ms: number }) {
   const color = ms > 5000 ? 'text-red-400 bg-red-500/10' : ms > 2000 ? 'text-orange-400 bg-orange-500/10' : 'text-yellow-400 bg-yellow-500/10'
   return (
@@ -26,21 +40,24 @@ function DurationBadge({ ms }: { ms: number }) {
 
 export default function SlowQueriesPage() {
   const refreshInterval = useAppRefreshInterval(60)
-  const { data: queries, mutate } = useSWR('/api/slow-queries', fetcher, { refreshInterval })
+  const { data: queries, mutate } = useSWR<SlowQuery[]>('/api/slow-queries', fetcher, { refreshInterval })
   const { data: dbs } = useSWR('/api/databases', fetcher)
 
   const list = Array.isArray(queries) ? queries : []
   const dbList = Array.isArray(dbs) ? dbs : []
 
   const [dbFilter, setDbFilter] = useState('all')
+  const [analysisFilter, setAnalysisFilter] = useState<'all' | 'analyzed'>('all')
+  const [minimumDuration, setMinimumDuration] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<'duration' | 'time'>('duration')
-  const [selectedQ, setSelectedQ] = useState<{ id: string; query: string; dbName: string; engine: string; durationMs: number; rowsExamined?: number; rowsReturned?: number; executedAt: string; analyzed: boolean; aiAnalysis?: { explanation: string; bottleneck: string; suggestions: string[]; estimatedGain: string; indexSuggestions: string[]; confidence: number } } | null>(null)
+  const [selectedQ, setSelectedQ] = useState<SlowQuery | null>(null)
   const [analyzing, setAnalyzing] = useState<string | null>(null)
 
   const filtered = list
-    .filter((q: { dbId: string; query: string }) => (dbFilter === 'all' || q.dbId === dbFilter) && (!search || q.query.toLowerCase().includes(search.toLowerCase())))
-    .sort((a: { durationMs: number; executedAt: string }, b: { durationMs: number; executedAt: string }) =>
+    .filter(q => (dbFilter === 'all' || q.dbId === dbFilter) && (!search || q.query.toLowerCase().includes(search.toLowerCase())) &&
+      (analysisFilter === 'all' || q.analyzed) && (minimumDuration === null || q.durationMs >= minimumDuration))
+    .sort((a, b) =>
       sortBy === 'duration' ? b.durationMs - a.durationMs : new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime()
     )
 
@@ -59,24 +76,56 @@ export default function SlowQueriesPage() {
 
   const avgDuration = list.length ? Math.round(list.reduce((s: number, q: { durationMs: number }) => s + q.durationMs, 0) / list.length) : 0
   const maxDuration = list.length ? Math.max(...list.map((q: { durationMs: number }) => q.durationMs)) : 0
+  const analyzedCount = list.filter(q => q.analyzed).length
+  const slowestQuery = list.find(q => q.durationMs === maxDuration) ?? null
+
+  const scrollToResults = () => document.getElementById('slow-query-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const showAllQueries = () => {
+    setDbFilter('all')
+    setAnalysisFilter('all')
+    setMinimumDuration(null)
+    setSearch('')
+    setSortBy('duration')
+    scrollToResults()
+  }
+  const showAnalyzedQueries = () => {
+    setDbFilter('all')
+    setAnalysisFilter('analyzed')
+    setMinimumDuration(null)
+    setSearch('')
+    setSortBy('duration')
+    scrollToResults()
+  }
+  const showAboveAverageQueries = () => {
+    setDbFilter('all')
+    setAnalysisFilter('all')
+    setMinimumDuration(avgDuration)
+    setSearch('')
+    setSortBy('duration')
+    scrollToResults()
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Total Captured', value: list.length, icon: Zap, color: 'text-orange-400' },
-          { label: 'AI Analyzed', value: list.filter((q: { analyzed: boolean }) => q.analyzed).length, icon: Brain, color: 'text-violet-400' },
-          { label: 'Avg Duration', value: avgDuration >= 1000 ? `${(avgDuration / 1000).toFixed(1)}s` : `${avgDuration}ms`, icon: Clock, color: 'text-yellow-400' },
-          { label: 'Slowest Query', value: maxDuration >= 1000 ? `${(maxDuration / 1000).toFixed(1)}s` : `${maxDuration}ms`, icon: AlertTriangle, color: 'text-red-400' },
-        ].map(s => (
-          <div key={s.label} className="rounded-2xl bg-[#0f1629] border border-slate-800 p-4">
-            <s.icon className={cn('w-5 h-5 mb-2', s.color)} />
-            <div className={cn('text-xl font-black', s.color)}>{s.value}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
-          </div>
-        ))}
+        <button type="button" onClick={showAllQueries} disabled={!list.length} aria-label={`Show all ${list.length} captured queries`}
+          className="text-left rounded-2xl bg-[#0f1629] border border-slate-800 p-4 cursor-pointer disabled:cursor-not-allowed hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-50 transition-colors">
+          <Zap className="w-5 h-5 mb-2 text-orange-400" /><div className="text-xl font-black text-orange-400">{list.length}</div><div className="text-xs text-slate-500 mt-0.5">Total Captured</div><div className="text-[10px] text-slate-600 mt-1">Show all queries</div>
+        </button>
+        <button type="button" onClick={showAnalyzedQueries} disabled={!analyzedCount} aria-label={`Show ${analyzedCount} AI-analyzed queries`}
+          className="text-left rounded-2xl bg-[#0f1629] border border-slate-800 p-4 cursor-pointer disabled:cursor-not-allowed hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-50 transition-colors">
+          <Brain className="w-5 h-5 mb-2 text-violet-400" /><div className="text-xl font-black text-violet-400">{analyzedCount}</div><div className="text-xs text-slate-500 mt-0.5">AI Analyzed</div><div className="text-[10px] text-slate-600 mt-1">Show analyzed queries</div>
+        </button>
+        <button type="button" onClick={showAboveAverageQueries} disabled={!list.length} aria-label={`Show queries at or above average duration of ${avgDuration} milliseconds`}
+          className="text-left rounded-2xl bg-[#0f1629] border border-slate-800 p-4 cursor-pointer disabled:cursor-not-allowed hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-50 transition-colors">
+          <Clock className="w-5 h-5 mb-2 text-yellow-400" /><div className="text-xl font-black text-yellow-400">{avgDuration >= 1000 ? `${(avgDuration / 1000).toFixed(1)}s` : `${avgDuration}ms`}</div><div className="text-xs text-slate-500 mt-0.5">Avg Duration</div><div className="text-[10px] text-slate-600 mt-1">Show at/above average</div>
+        </button>
+        <button type="button" onClick={() => slowestQuery && (setDbFilter(slowestQuery.dbId), setAnalysisFilter('all'), setMinimumDuration(null), setSearch(''), setSortBy('duration'), setSelectedQ(slowestQuery))} disabled={!slowestQuery} aria-label={slowestQuery ? `Open slowest query, ${slowestQuery.durationMs} milliseconds, from ${slowestQuery.dbName}` : 'No slowest query available'}
+          className="text-left rounded-2xl bg-[#0f1629] border border-slate-800 p-4 cursor-pointer disabled:cursor-not-allowed hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-50 transition-colors">
+          <AlertTriangle className="w-5 h-5 mb-2 text-red-400" /><div className="text-xl font-black text-red-400">{maxDuration >= 1000 ? `${(maxDuration / 1000).toFixed(1)}s` : `${maxDuration}ms`}</div><div className="text-xs text-slate-500 mt-0.5">Slowest Query</div><div className="text-[10px] text-slate-600 mt-1">Open query details</div>
+        </button>
       </div>
 
       {/* Filters */}
@@ -99,9 +148,15 @@ export default function SlowQueriesPage() {
       </div>
 
       {/* Query list */}
-      <div className="rounded-2xl bg-[#0f1629] border border-slate-800 overflow-hidden">
+      <div id="slow-query-results" className="scroll-mt-6 rounded-2xl bg-[#0f1629] border border-slate-800 overflow-hidden">
+        {(analysisFilter !== 'all' || minimumDuration !== null) && (
+          <div className="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-2 text-xs text-slate-400">
+            <span>{analysisFilter === 'analyzed' ? 'Showing AI-analyzed queries' : `Showing queries at or above ${minimumDuration}ms`}</span>
+            <button type="button" onClick={showAllQueries} className="text-emerald-400 hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded">Clear filter</button>
+          </div>
+        )}
         <div className="divide-y divide-slate-800/60">
-          {filtered.map((q: { id: string; query: string; durationMs: number; dbName: string; engine: string; executedAt: string; analyzed: boolean; rowsExamined?: number; rowsReturned?: number; aiAnalysis?: { explanation: string; bottleneck: string; suggestions: string[]; estimatedGain: string; indexSuggestions: string[]; confidence: number } }) => (
+          {filtered.map((q: SlowQuery) => (
             <div key={q.id} className="p-4 hover:bg-slate-800/20 transition-colors cursor-pointer" onClick={() => setSelectedQ(q)}>
               <div className="flex items-start gap-3">
                 <Zap className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />

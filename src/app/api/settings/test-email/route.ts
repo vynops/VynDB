@@ -8,9 +8,11 @@ export async function POST(req: NextRequest) {
   const { to } = await req.json() as { to?: string }
   if (!to) return NextResponse.json({ error: 'Recipient email (to) is required' }, { status: 400 })
   try {
-    await sendEmail([to], '[VynDB] Test email from VynDB Notifications', `This is a test email from VynDB.\n\nIf you received this, your SMTP configuration is working correctly.\n\nSent: ${new Date().toISOString()}`)
-    return NextResponse.json({ ok: true, message: `Test email sent to ${to}` })
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 })
+    const result = await sendEmail([to], '[VynDB] Test email from VynDB Notifications', `This is a test email from VynDB.\n\nIf you received this, your SMTP configuration is working correctly.\n\nSent: ${new Date().toISOString()}`)
+    if (result === 'sent') return NextResponse.json({ ok: true, message: `Test email sent to ${to}` })
+    if (result === 'skipped') return NextResponse.json({ ok: false, message: 'Email test skipped: enable email alerts and configure SMTP.' }, { status: 503 })
+    return NextResponse.json({ ok: false, message: 'Email test failed. Check SMTP settings and notification logs.' }, { status: 502 })
+  } catch {
+    return NextResponse.json({ ok: false, message: 'Email test failed unexpectedly.' }, { status: 500 })
   }
 }
