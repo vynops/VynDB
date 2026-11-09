@@ -67,14 +67,12 @@ export default function DiagnosticsPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
-      <div className="flex justify-end gap-2">
-        <div className="flex items-center gap-2">
-          <select value={databaseId} onChange={event => setDatabaseId(event.target.value)} className="settings-input min-w-56">
-            <option value="">Select a database</option>
-            {list.map(database => <option key={database.id} value={database.id}>{database.name} ({database.engine})</option>)}
-          </select>
-          <button onClick={() => mutate()} disabled={!databaseId || isLoading} className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-xs text-slate-300">Refresh</button>
-        </div>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <select value={databaseId} onChange={event => setDatabaseId(event.target.value)} className="px-3 py-2 rounded-xl bg-[#0f1629] border border-slate-700 text-sm text-slate-300 flex-1 min-w-0">
+          <option value="">Select a database</option>
+          {list.map(database => <option key={database.id} value={database.id}>{database.name} ({database.engine})</option>)}
+        </select>
+        <button onClick={() => mutate()} disabled={!databaseId || isLoading} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-xs text-slate-300">Refresh</button>
       </div>
 
       {!databaseId && (
