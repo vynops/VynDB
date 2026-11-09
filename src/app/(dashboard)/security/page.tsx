@@ -88,6 +88,11 @@ export default function SecurityPage() {
     setFilterStatus(null)
   }
 
+  const showSecurityOverview = () => {
+    clearFilters()
+    document.getElementById('security-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const handleAck = async (id: string) => {
     await fetch(`/api/security/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'acknowledged' }) })
   }
@@ -97,7 +102,7 @@ export default function SecurityPage() {
 
       {/* Score */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <button type="button" onClick={() => document.getElementById('security-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        <button type="button" onClick={showSecurityOverview}
           className="text-left rounded-2xl bg-[#0f1629] border border-slate-800 p-5 sm:col-span-1 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors">
           <Shield className={cn('w-6 h-6 mb-2', score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-yellow-400' : 'text-red-400')} />
           <div className={cn('text-3xl font-black', score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-yellow-400' : 'text-red-400')}>{score}</div>
