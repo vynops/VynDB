@@ -59,7 +59,34 @@ export default function SecurityPage() {
   }
   const dbSummaries = [...byDb.values()].sort((a, b) => b.open - a.open)
   const [filterDb, setFilterDb] = useState<string | null>(null)
-  const filteredList = filterDb ? list.filter((f: { dbId: string }) => f.dbId === filterDb) : list
+  const [filterSeverity, setFilterSeverity] = useState<string | null>(null)
+  const [filterStatus, setFilterStatus] = useState<string | null>(null)
+  const filteredList = list.filter((finding: { dbId: string; severity: string; status: string }) =>
+    (!filterDb || finding.dbId === filterDb) &&
+    (!filterSeverity || finding.severity === filterSeverity) &&
+    (!filterStatus || finding.status === filterStatus)
+  )
+  const filteredOpen = filteredList.filter((finding: { status: string }) => finding.status === 'open').length
+  const hasFilters = Boolean(filterDb || filterSeverity || filterStatus)
+  const scrollToFindings = () => document.getElementById('security-findings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+  const filterOpenSeverity = (severity: string) => {
+    setFilterSeverity(severity)
+    setFilterStatus('open')
+    scrollToFindings()
+  }
+
+  const filterResolved = () => {
+    setFilterSeverity(null)
+    setFilterStatus('resolved')
+    scrollToFindings()
+  }
+
+  const clearFilters = () => {
+    setFilterDb(null)
+    setFilterSeverity(null)
+    setFilterStatus(null)
+  }
 
   const handleAck = async (id: string) => {
     await fetch(`/api/security/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'acknowledged' }) })
@@ -70,30 +97,38 @@ export default function SecurityPage() {
 
       {/* Score */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-2xl bg-[#0f1629] border border-slate-800 p-5 sm:col-span-1">
+        <button type="button" onClick={() => document.getElementById('security-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          className="text-left rounded-2xl bg-[#0f1629] border border-slate-800 p-5 sm:col-span-1 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors">
           <Shield className={cn('w-6 h-6 mb-2', score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-yellow-400' : 'text-red-400')} />
           <div className={cn('text-3xl font-black', score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-yellow-400' : 'text-red-400')}>{score}</div>
           <div className="text-xs text-slate-500 mt-0.5">Security Score /100</div>
-        </div>
-        <div className="rounded-2xl bg-[#0f1629] border border-slate-800 p-4">
+          <div className="text-[10px] text-slate-600 mt-1">View database summary</div>
+        </button>
+        <button type="button" onClick={() => filterOpenSeverity('critical')} aria-label={`Show ${critical} open critical findings`}
+          className="text-left rounded-2xl bg-[#0f1629] border border-slate-800 p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors">
           <AlertTriangle className="w-4 h-4 text-red-400 mb-2" />
           <div className="text-xl font-black text-red-400">{critical}</div>
           <div className="text-xs text-slate-500">Critical</div>
-        </div>
-        <div className="rounded-2xl bg-[#0f1629] border border-slate-800 p-4">
+          <div className="text-[10px] text-slate-600 mt-1">Show open findings</div>
+        </button>
+        <button type="button" onClick={() => filterOpenSeverity('high')} aria-label={`Show ${high} open high-severity findings`}
+          className="text-left rounded-2xl bg-[#0f1629] border border-slate-800 p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors">
           <AlertTriangle className="w-4 h-4 text-orange-400 mb-2" />
           <div className="text-xl font-black text-orange-400">{high}</div>
           <div className="text-xs text-slate-500">High</div>
-        </div>
-        <div className="rounded-2xl bg-[#0f1629] border border-slate-800 p-4">
+          <div className="text-[10px] text-slate-600 mt-1">Show open findings</div>
+        </button>
+        <button type="button" onClick={filterResolved} aria-label={`Show ${list.filter((finding: { status: string }) => finding.status === 'resolved').length} resolved findings`}
+          className="text-left rounded-2xl bg-[#0f1629] border border-slate-800 p-4 cursor-pointer hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors">
           <CheckCircle className="w-4 h-4 text-emerald-400 mb-2" />
           <div className="text-xl font-black text-slate-300">{list.filter((f: { status: string }) => f.status === 'resolved').length}</div>
           <div className="text-xs text-slate-500">Resolved</div>
-        </div>
+          <div className="text-[10px] text-slate-600 mt-1">Show resolved findings</div>
+        </button>
       </div>
 
       {/* Security summary per DB — click to filter findings below */}
-      <div className="rounded-2xl bg-[#0f1629] border border-slate-800 p-5">
+      <div id="security-summary" className="rounded-2xl bg-[#0f1629] border border-slate-800 p-5 scroll-mt-6">
         <h3 className="text-sm font-bold text-white mb-1">Security Check Summary</h3>
         <p className="text-xs text-slate-500 mb-3">Click a database to filter findings below</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -135,17 +170,17 @@ export default function SecurityPage() {
       </div>
 
       {/* Findings list */}
-      <div className="rounded-2xl bg-[#0f1629] border border-slate-800 overflow-hidden">
+      <div id="security-findings" className="rounded-2xl bg-[#0f1629] border border-slate-800 overflow-hidden scroll-mt-6">
         <div className="px-5 py-4 border-b border-slate-800">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-sm font-bold text-white">Security Findings</h2>
-              <p className="text-xs text-slate-500">{open} open findings requiring attention</p>
+              <p className="text-xs text-slate-500">{hasFilters ? `${filteredList.length} findings shown · ${filteredOpen} open` : `${open} open findings requiring attention`}</p>
             </div>
-            {filterDb && (
-              <button onClick={() => setFilterDb(null)}
+            {hasFilters && (
+              <button onClick={clearFilters}
                 className="text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors">
-                × Clear filter
+                × Clear filters
               </button>
             )}
           </div>
