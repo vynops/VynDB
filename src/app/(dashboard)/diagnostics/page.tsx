@@ -42,6 +42,19 @@ export default function DiagnosticsPage() {
   const supportsBlockers = ['postgresql', 'sqlserver'].includes(engine)
   const supportsWaits = ['postgresql', 'mysql', 'sqlserver', 'mongodb'].includes(engine)
   const hasDeadlockCounter = typeof postgresDeadlockStats?.deadlocks === 'number'
+  const mongoOperations = engine === 'mongodb'
+    ? (data?.waits ?? []).filter((operation): operation is Record<string, unknown> => Boolean(operation) && typeof operation === 'object')
+    : []
+  const isRoutineMongoOperation = (operation: Record<string, unknown>) => {
+    const command = operation.command && typeof operation.command === 'object'
+      ? operation.command as Record<string, unknown>
+      : {}
+    return operation.op === 'none' ||
+      ['Checkpointer', 'JournalFlusher'].includes(String(operation.desc ?? '')) ||
+      command.hello === 1 || command.currentOp === true
+  }
+  const visibleMongoOperations = mongoOperations.filter(operation => !isRoutineMongoOperation(operation))
+  const hiddenMongoOperations = mongoOperations.length - visibleMongoOperations.length
   const cards = [
     {
       target: 'lock-evidence', label: engine === 'redis' ? 'Clients' : engine === 'mysql' ? 'InnoDB transactions' : engine === 'sqlserver' ? 'Active requests' : 'Lock conflicts',
@@ -55,7 +68,7 @@ export default function DiagnosticsPage() {
     },
     {
       target: 'wait-evidence', label: engine === 'mongodb' ? 'Active operations' : engine === 'mysql' ? 'Process states' : 'Waits',
-      value: supportsWaits ? data?.waits?.length ?? 0 : '—', available: supportsWaits,
+      value: supportsWaits ? engine === 'mongodb' ? visibleMongoOperations.length : data?.waits?.length ?? 0 : '—', available: supportsWaits,
       icon: Timer, color: 'text-orange-400',
     },
     {
@@ -122,7 +135,30 @@ export default function DiagnosticsPage() {
           <div id="wait-evidence" className="rounded-2xl bg-[#0f1629] border border-slate-800 p-5 scroll-mt-6">
             <h2 className="text-sm font-bold text-white mb-3">{engine === 'mongodb' ? 'Active operations' : engine === 'mysql' ? 'Process states with activity' : 'Wait evidence'}</h2>
             {!supportsWaits ? <p className="text-xs text-slate-400">Wait details are not collected for {engine || 'this engine'}.</p>
-              : data.waits.length === 0 ? <p className="text-xs text-slate-400">No current waits or active operations reported.</p>
+              : engine === 'mongodb' ? (
+                <div className="space-y-2">
+                  {hiddenMongoOperations > 0 && <p className="text-[11px] text-slate-500">{hiddenMongoOperations} routine driver heartbeat, background, or diagnostics operation(s) hidden.</p>}
+                  {visibleMongoOperations.map((operation, index) => {
+                    const command = operation.command && typeof operation.command === 'object' ? operation.command as Record<string, unknown> : {}
+                    const commandName = Object.keys(command).find(key => !key.startsWith('$')) ?? String(operation.op ?? 'operation')
+                    const durationSeconds = typeof operation.secs_running === 'number'
+                      ? operation.secs_running
+                      : typeof operation.microsecs_running === 'number' ? operation.microsecs_running / 1_000_000 : undefined
+                    return (
+                      <details key={`${String(operation.opid ?? operation.connectionId ?? 'operation')}-${index}`} className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+                        <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">
+                          <span className="font-semibold text-white">{commandName}</span>
+                          <span className="text-slate-500">{String(operation.ns ?? command.$db ?? 'namespace unavailable')}</span>
+                          {durationSeconds !== undefined && <span className="text-slate-400">{durationSeconds.toFixed(2)}s</span>}
+                          {typeof operation.waitingForLock === 'boolean' && <span className={operation.waitingForLock ? 'text-amber-400' : 'text-slate-500'}>{operation.waitingForLock ? 'Waiting for lock' : 'Not waiting for lock'}</span>}
+                        </summary>
+                        <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words text-[10px] text-slate-400">{JSON.stringify(operation, null, 2)}</pre>
+                      </details>
+                    )
+                  })}
+                  {visibleMongoOperations.length === 0 && <p className="text-xs text-slate-400">No non-routine operations are currently active.</p>}
+                </div>
+              ) : data.waits.length === 0 ? <p className="text-xs text-slate-400">No current waits reported.</p>
               : <pre className="text-xs text-slate-300 overflow-auto whitespace-pre-wrap">{JSON.stringify(data.waits, null, 2)}</pre>}
           </div>
           <div id="deadlock-evidence" className="rounded-2xl bg-[#0f1629] border border-slate-800 p-5 scroll-mt-6">
