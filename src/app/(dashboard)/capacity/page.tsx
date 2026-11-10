@@ -10,7 +10,7 @@ const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 function GB(mb?: number) {
   if (mb === undefined) return '—'
-  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(2)} MB`
 }
 
 export default function CapacityPage() {
@@ -71,7 +71,7 @@ export default function CapacityPage() {
                   <div className="text-[9px] text-slate-500">Indexes</div>
                 </div>
                 <div className="p-2 rounded-lg bg-slate-900/50">
-                  <div className="text-xs font-bold text-orange-300">{cap.growthMBPerDay >= 1024 ? `${(cap.growthMBPerDay / 1024).toFixed(1)} GB` : `${cap.growthMBPerDay} MB`}/d</div>
+                  <div className="text-xs font-bold text-orange-300">{cap.growthMBPerDay >= 1024 ? `${(cap.growthMBPerDay / 1024).toFixed(1)} GB` : `${cap.growthMBPerDay.toFixed(2)} MB`}/d</div>
                   <div className="text-[9px] text-slate-500">Growth</div>
                 </div>
               </div>
@@ -94,7 +94,7 @@ export default function CapacityPage() {
                     <div key={t.name} className="flex items-center gap-2 py-1">
                       <span className="text-[11px] text-slate-300 flex-1 truncate font-mono">{t.name}</span>
                       <span className="text-[10px] text-slate-400">{GB(t.sizeMB)}</span>
-                      {t.growthMBPerDay > 0 && <span className="text-[10px] text-yellow-400">+{t.growthMBPerDay}MB/d</span>}
+                      {t.growthMBPerDay > 0 && <span className="text-[10px] text-yellow-400">+{t.growthMBPerDay.toFixed(2)} MB/d</span>}
                     </div>
                   ))}
                 </div>

@@ -89,11 +89,6 @@ export default function LoginPage() {
           </button>
         </form>
 
-			<div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3 text-xs text-slate-500 space-y-1.5">
-          <p className="font-semibold text-slate-400">First-time setup</p>
-          <p>Fresh installs sign in as <span className="font-mono text-slate-400">admin@vyndb.local</span> with password <span className="font-mono text-slate-400">changeme</span>. You must set a new password before using the dashboard.</p>
-        </div>
-
         <p className="text-center text-xs text-slate-600 mt-4">
           Part of the{' '}
           <a href="https://vynops.com/" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:text-emerald-400 transition-colors">VynOps Suite</a>
