@@ -50,6 +50,9 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="bg-[#111827] border border-slate-800 rounded-2xl p-6 space-y-4">
+          <div className="text-center">
+            <h2 className="text-lg font-semibold text-white">Log In</h2>
+          </div>
           {error && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
