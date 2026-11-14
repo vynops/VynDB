@@ -244,7 +244,7 @@ Full incident lifecycle from auto-raise to resolution.
 - **Acknowledge / resolve / assign** with notes
 - **SLA tracking** — configurable ack/resolve targets per severity (critical 15min/1h, high 30min/4h, medium 2h/8h, low 8h/24h)
 - **Alert routing** — route incidents to Slack, email, or on-call based on severity + category (first-match wins)
-- **Escalation policies** — multi-step escalation if incident remains unacknowledged
+- **Escalation policies** — multi-step escalation keeps its configured delays; successful channels are deduplicated, unavailable required channels are reported as configuration errors, and delivery failures retry up to five times with a five-minute exponential backoff capped at 30 minutes. Audit entries identify the incident, step, attempt and outcome; disabled channels are marked not applicable.
 - **On-call schedule** — weekly rotation, time-zone aware
 
 ### 🤖 Automation Engine

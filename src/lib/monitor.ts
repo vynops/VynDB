@@ -15,14 +15,27 @@ import {
   type PerformanceSnapshot, type CapacityEntry, type ReplicationStatus, type SlowQuery,
 } from './db-store'
 import { loadRules, saveRule, addRun, loadProposals, saveProposal, newProposalId, type AutonomousProposal } from './automation-store'
-import { loadIncidents, addIncident, patchIncident, loadEscalations, loadSla } from './incident-store'
-import { sendSlack, sendTeams, sendWebhook, sendEmail, notifyIncident } from './notifier'
+import { loadIncidents, addIncident, patchIncident, loadEscalations, loadSla, currentOnCallEmails } from './incident-store'
+import { sendSlack, sendTeams, sendWebhook, sendEmail, notifyIncident, notifyIncidentDetailed, type IncidentDeliveryReport } from './notifier'
 import { getSettings } from './settings-store'
 import { matchRouting } from './incident-store'
 import { appendAudit } from './audit-store'
 import { isStatusStale } from './status-freshness'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
+const ESCALATION_RETRY_BASE_MS = 5 * 60_000
+const ESCALATION_RETRY_MAX_MS = 30 * 60_000
+const ESCALATION_MAX_ATTEMPTS = 5
+
+type EscalationOutcome = 'sent' | 'not_applicable' | 'configuration_error' | 'retrying' | 'retry_exhausted'
+interface EscalationStepState {
+  signature: string
+  outcome: EscalationOutcome
+  attempt: number
+  nextRetryAt?: string
+  updatedAt: string
+  channels: IncidentDeliveryReport['channels']
+}
 
 function loadJson<T>(file: string, def: T): T {
   const p = path.join(DATA_DIR, file)
@@ -472,7 +485,7 @@ export async function runMonitor(): Promise<MonitorResult> {
 
   // Persist SLA breach state and deliver delayed escalation steps once per incident/step.
   const sla = loadSla()
-  const escalationState = loadJson<Record<string, string>>('escalation-state.json', {})
+  const escalationState = loadJson<Record<string, string | EscalationStepState>>('escalation-state.json', {})
   const escalationPolicies = loadEscalations()
   for (const incident of loadIncidents()) {
     for (const event of incident.notificationEvents ?? []) {
@@ -495,14 +508,128 @@ export async function runMonitor(): Promise<MonitorResult> {
       const condition = step.condition ?? (step.delayMin <= target.ackMinutes ? 'unacknowledged' : 'unresolved')
       if (step.delayMin < 0 || ageMinutes < step.delayMin || (incident.acknowledgedAt && condition === 'unacknowledged')) continue
       const stateKey = `${incident.id}:${policy.id}:${stepIndex}${incident.reopenedAt ? `:${incident.reopenedAt}` : ''}`
-      if (escalationState[stateKey]) continue
+      const emailEnabled = !!settings.alertEmailEnabled
+      const oncallEmails = step.notifyOncall && emailEnabled ? currentOnCallEmails().slice().sort() : []
+      const generalEmails = emailEnabled
+        ? [...new Set(step.notifyEmails)].filter(email => !oncallEmails.includes(email)).sort()
+        : []
+      const smtpSettings = emailEnabled ? {
+        host: settings.smtpHost,
+        port: settings.smtpPort,
+        user: settings.smtpUser,
+        password: settings.smtpPassword,
+        from: settings.smtpFrom,
+      } : undefined
+      const stepSignature = crypto.createHash('sha256').update(JSON.stringify({
+        incident: {
+          dbId: incident.dbId,
+          dbName: incident.dbName,
+          category: incident.category,
+          title: incident.title,
+          severity: incident.severity,
+          status: incident.status,
+          acknowledgedAt: incident.acknowledgedAt,
+          reopenedAt: incident.reopenedAt,
+        },
+        policy: policy.id,
+        step: {
+          delayMin: step.delayMin,
+          condition,
+          message: step.message,
+          notifySlack: !!step.notifySlack,
+          notifyTeams: !!step.notifyTeams,
+          notifyWebhook: !!step.notifyWebhook,
+          notifyOncall: !!step.notifyOncall,
+          notifyEmails: emailEnabled && step.notifyEmails.length ? [...step.notifyEmails].sort() : [],
+        },
+        channels: {
+          ...(step.notifySlack ? { slack: {
+            destination: settings.slackWebhookUrl,
+            ...(settings.slackWebhookUrl ? { cooldownMinutes: settings.notifyCooldownMinutes } : {}),
+          } } : {}),
+          ...(step.notifyTeams ? { teams: {
+            destination: settings.teamsWebhookUrl,
+            ...(settings.teamsWebhookUrl ? { cooldownMinutes: settings.notifyCooldownMinutes } : {}),
+          } } : {}),
+          ...(step.notifyWebhook ? { webhook: {
+            destination: settings.customWebhookUrl,
+            ...(settings.customWebhookUrl ? { team: settings.notificationTeam, cooldownMinutes: settings.notifyCooldownMinutes } : {}),
+          } } : {}),
+          ...(step.notifyEmails.length ? { email: {
+            enabled: emailEnabled,
+            recipients: generalEmails,
+            ...(emailEnabled ? {
+              smtp: smtpSettings,
+              ...(settings.smtpHost ? { cooldownMinutes: settings.notifyCooldownMinutes } : {}),
+            } : {}),
+          } } : {}),
+          ...(step.notifyOncall ? { oncall: {
+            enabled: emailEnabled,
+            recipients: oncallEmails,
+            ...(emailEnabled ? {
+              smtp: smtpSettings,
+              ...(settings.smtpHost ? { cooldownMinutes: settings.notifyCooldownMinutes } : {}),
+            } : {}),
+          } } : {}),
+        },
+      })).digest('hex')
+      const priorState = escalationState[stateKey]
+      if (typeof priorState === 'string') continue
+      const matchingState = priorState?.signature === stepSignature ? priorState : undefined
+      if (matchingState && (
+        matchingState.outcome === 'sent' ||
+        matchingState.outcome === 'not_applicable' ||
+        matchingState.outcome === 'configuration_error' ||
+        matchingState.outcome === 'retry_exhausted' ||
+        (matchingState.outcome === 'retrying' && Date.parse(matchingState.nextRetryAt ?? '') > Date.now())
+      )) continue
       const message = step.message ?? `Escalation: ${incident.title} remains ${incident.status}`
-      const delivered = await notifyIncident(incident, { ...step, notifyTeams: !!step.notifyTeams, notifyWebhook: !!step.notifyWebhook }, `escalation:${policy.id}:${stepIndex}`, `[VynDB ESCALATION] ${message}\nIncident: ${incident.id}\nTitle: ${incident.title}\nDatabase: ${incident.dbName}`)
-      if (delivered) {
-        escalationState[stateKey] = new Date().toISOString()
-        saveJson('escalation-state.json', escalationState)
+      const targets = { ...step, notifyTeams: !!step.notifyTeams, notifyWebhook: !!step.notifyWebhook }
+      const notificationKey = `escalation:${policy.id}:${stepIndex}`
+      const notificationMessage = `[VynDB ESCALATION] ${message}\nIncident: ${incident.id}\nTitle: ${incident.title}\nDatabase: ${incident.dbName}`
+      const report: IncidentDeliveryReport = await notifyIncidentDetailed(incident, targets, notificationKey, notificationMessage)
+      const attempt = (matchingState?.attempt ?? 0) + 1
+      const retryableFailure = report.channels.some(channel => channel.outcome === 'failed')
+      const hasConfigurationError = report.channels.some(channel => channel.outcome === 'configuration_error')
+      const nextRetryAt = retryableFailure && attempt < ESCALATION_MAX_ATTEMPTS
+        ? new Date(Date.now() + Math.min(ESCALATION_RETRY_BASE_MS * (2 ** (attempt - 1)), ESCALATION_RETRY_MAX_MS)).toISOString()
+        : undefined
+      const outcome: EscalationOutcome = retryableFailure
+        ? (attempt >= ESCALATION_MAX_ATTEMPTS ? 'retry_exhausted' : 'retrying')
+        : hasConfigurationError
+          ? 'configuration_error'
+          : report.channels.some(channel => channel.outcome === 'sent') && report.complete
+            ? 'sent'
+            : 'not_applicable'
+      const updatedAt = new Date().toISOString()
+      escalationState[stateKey] = {
+        signature: stepSignature,
+        outcome,
+        attempt,
+        ...(nextRetryAt ? { nextRetryAt } : {}),
+        updatedAt,
+        channels: report.channels,
       }
-      appendAudit({ actor: 'monitor', action: 'incident.escalate', resource: 'incident', resourceId: incident.id, success: delivered, details: { policy: policy.id, step: stepIndex } })
+      saveJson('escalation-state.json', escalationState)
+      appendAudit({
+        actor: 'monitor',
+        action: 'incident.escalate',
+        resource: 'incident',
+        resourceId: incident.id,
+        success: outcome === 'sent',
+        details: {
+          incidentId: incident.id,
+          incidentTitle: incident.title,
+          incidentSeverity: incident.severity,
+          incidentStatus: incident.status,
+          policy: policy.id,
+          step: stepIndex,
+          outcome,
+          attempt,
+          ...(nextRetryAt ? { nextRetryAt } : {}),
+          channels: report.channels,
+        },
+      })
     }
   }
   saveJson('escalation-state.json', escalationState)

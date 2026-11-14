@@ -9,6 +9,17 @@ import { appendAudit } from './audit-store'
 const NOTIFY_STATE = path.join(process.cwd(), 'data', 'notification-state.json')
 const NOTIFY_LOG = path.join(process.cwd(), 'data', 'notification-log.json')
 
+function targetFingerprint(target: unknown): string {
+  return crypto.createHash('sha256').update(JSON.stringify(target)).digest('hex')
+}
+
+function saveIncidentDeliveryState(file: string, state: Record<string, DeliveryResult>) {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  const temp = `${file}.${process.pid}.tmp`
+  fs.writeFileSync(temp, JSON.stringify(state), 'utf8')
+  fs.renameSync(temp, file)
+}
+
 function logDelivery(channel: string, ok: boolean, message: string) {
   try {
     let entries: Array<{ channel: string; ok: boolean; message: string; createdAt: string }> = []
@@ -41,6 +52,13 @@ function claimNotification(key: string): boolean {
 
 export type DeliveryResult = 'sent' | 'skipped' | 'failed'
 
+export type IncidentChannelOutcome = 'sent' | 'not_applicable' | 'configuration_error' | 'failed'
+
+export interface IncidentDeliveryReport {
+  complete: boolean
+  channels: Array<{ channel: string; outcome: IncidentChannelOutcome }>
+}
+
 function releaseNotification(key: string) {
   let state: Record<string, number> = {}
   try { state = JSON.parse(fs.readFileSync(NOTIFY_STATE, 'utf8')) as Record<string, number> } catch { return }
@@ -53,7 +71,7 @@ function releaseNotification(key: string) {
 export async function sendSlack(text: string): Promise<DeliveryResult> {
   const { slackWebhookUrl } = getSettings()
   if (!slackWebhookUrl) return 'skipped'
-  const key = `slack:${text}`
+  const key = `slack:${slackWebhookUrl}:${text}`
   if (!claimNotification(key)) return 'skipped'
   try {
     const res = await fetch(slackWebhookUrl, {
@@ -77,7 +95,7 @@ export async function sendSlack(text: string): Promise<DeliveryResult> {
 export async function sendTeams(text: string): Promise<DeliveryResult> {
   const { teamsWebhookUrl } = getSettings()
   if (!teamsWebhookUrl) return 'skipped'
-  const key = `teams:${text}`
+  const key = `teams:${teamsWebhookUrl}:${text}`
   if (!claimNotification(key)) return 'skipped'
   try {
     const res = await fetch(teamsWebhookUrl, {
@@ -107,7 +125,7 @@ export async function sendWebhook(payload: Record<string, unknown>): Promise<Del
   const { customWebhookUrl } = getSettings()
   if (!customWebhookUrl) return 'skipped'
   const serialized = JSON.stringify(payload)
-  const key = `webhook:${serialized}`
+  const key = `webhook:${customWebhookUrl}:${serialized}`
   if (!claimNotification(key)) return 'skipped'
   try {
     const res = await fetch(customWebhookUrl, {
@@ -131,7 +149,12 @@ export async function sendWebhook(payload: Record<string, unknown>): Promise<Del
 export async function sendEmail(to: string[], subject: string, body: string): Promise<DeliveryResult> {
   const s = getSettings()
   if (!s.alertEmailEnabled || !s.smtpHost || to.length === 0) return 'skipped'
-  const key = `email:${[...new Set(to)].sort().join(',')}:${subject}:${body}`
+  const key = `email:${JSON.stringify({
+    recipients: [...new Set(to)].sort(),
+    subject,
+    body,
+    smtp: { host: s.smtpHost, port: s.smtpPort, user: s.smtpUser, password: s.smtpPassword, from: s.smtpFrom },
+  })}`
   if (!claimNotification(key)) return 'skipped'
   try {
     const transporter = nodemailer.createTransport({
@@ -161,12 +184,12 @@ export async function sendEmail(to: string[], subject: string, body: string): Pr
   }
 }
 
-export async function notifyIncident(
+export async function notifyIncidentDetailed(
   incident: Incident,
   targets: Pick<RoutingRule, 'notifySlack' | 'notifyTeams' | 'notifyWebhook' | 'notifyOncall' | 'notifyEmails'>,
   notificationKey = 'initial',
   message = `[VynDB ${incident.severity.toUpperCase()}] ${incident.title}\nIncident: ${incident.id}\nDatabase: ${incident.dbName}\nCategory: ${incident.category}\nStatus: ${incident.status}`,
-): Promise<boolean> {
+): Promise<IncidentDeliveryReport> {
   const file = path.join(process.cwd(), 'data', 'incident-deliveries.json')
   let state: Record<string, DeliveryResult> = {}
   try { state = JSON.parse(fs.readFileSync(file, 'utf8')) as typeof state } catch {}
@@ -177,27 +200,76 @@ export async function notifyIncident(
   if (!escalation && settings.alertRecipients) emails.push(...settings.alertRecipients.split(',').map(email => email.trim()).filter(Boolean))
   const generalEmails = [...new Set(emails)].filter(email => !oncallEmails.includes(email))
   const deliveryMessage = `${message}\nNotification: ${notificationKey}\nCycle: ${incident.reopenedAt ?? incident.createdAt ?? 'original'}`
-  const deliveries: Array<[string, () => Promise<DeliveryResult>]> = []
-  if (targets.notifySlack) deliveries.push(['slack', () => sendSlack(deliveryMessage)])
-  if (targets.notifyTeams) deliveries.push(['teams', () => sendTeams(deliveryMessage)])
-  if (targets.notifyWebhook) deliveries.push(['webhook', () => sendWebhook({ alert_type: escalation ? 'escalation' : 'incident', incidentId: incident.id, title: incident.title, severity: incident.severity, category: incident.category, status: incident.status, database: incident.dbName, team: settings.notificationTeam || undefined, notificationKey, reopenedAt: incident.reopenedAt, message: deliveryMessage })])
-  if (generalEmails.length) deliveries.push(['email', () => sendEmail(generalEmails, `[VynDB ${incident.severity.toUpperCase()}] ${incident.title}`, deliveryMessage)])
-  if (targets.notifyOncall) deliveries.push(['oncall', () => sendEmail([...new Set(oncallEmails)], `[VynDB ${incident.severity.toUpperCase()}] ${incident.title}`, deliveryMessage)])
+  const deliveryBaseKey = `${incident.id}:${incident.reopenedAt ?? 'original'}:${notificationKey}`
+  const smtpTarget = { host: settings.smtpHost, port: settings.smtpPort, user: settings.smtpUser, password: settings.smtpPassword, from: settings.smtpFrom }
+  const deliveries: Array<{ channel: string; target: unknown; deliver: () => Promise<DeliveryResult> }> = []
+  const channels: IncidentDeliveryReport['channels'] = []
+  if (targets.notifySlack) {
+    if (!settings.slackWebhookUrl) channels.push({ channel: 'slack', outcome: 'configuration_error' })
+    else deliveries.push({ channel: 'slack', target: { destination: settings.slackWebhookUrl }, deliver: () => sendSlack(deliveryMessage) })
+  } else channels.push({ channel: 'slack', outcome: 'not_applicable' })
+  if (targets.notifyTeams) {
+    if (!settings.teamsWebhookUrl) channels.push({ channel: 'teams', outcome: 'configuration_error' })
+    else deliveries.push({ channel: 'teams', target: { destination: settings.teamsWebhookUrl }, deliver: () => sendTeams(deliveryMessage) })
+  } else channels.push({ channel: 'teams', outcome: 'not_applicable' })
+  if (targets.notifyWebhook) {
+    if (!settings.customWebhookUrl) channels.push({ channel: 'webhook', outcome: 'configuration_error' })
+    else deliveries.push({ channel: 'webhook', target: { destination: settings.customWebhookUrl, team: settings.notificationTeam }, deliver: () => sendWebhook({ alert_type: escalation ? 'escalation' : 'incident', incidentId: incident.id, title: incident.title, severity: incident.severity, category: incident.category, status: incident.status, database: incident.dbName, team: settings.notificationTeam || undefined, notificationKey, reopenedAt: incident.reopenedAt, message: deliveryMessage }) })
+  } else channels.push({ channel: 'webhook', outcome: 'not_applicable' })
+  if (generalEmails.length) {
+    if (!settings.alertEmailEnabled) channels.push({ channel: 'email', outcome: 'not_applicable' })
+    else if (!settings.smtpHost) channels.push({ channel: 'email', outcome: 'configuration_error' })
+    else deliveries.push({ channel: 'email', target: { recipients: [...generalEmails].sort(), smtp: smtpTarget }, deliver: () => sendEmail(generalEmails, `[VynDB ${incident.severity.toUpperCase()}] ${incident.title}`, deliveryMessage) })
+  } else channels.push({ channel: 'email', outcome: 'not_applicable' })
+  if (targets.notifyOncall) {
+    if (!settings.alertEmailEnabled) channels.push({ channel: 'oncall', outcome: 'not_applicable' })
+    else if (oncallEmails.length === 0 || !settings.smtpHost) channels.push({ channel: 'oncall', outcome: 'configuration_error' })
+    else deliveries.push({ channel: 'oncall', target: { recipients: [...new Set(oncallEmails)].sort(), smtp: smtpTarget }, deliver: () => sendEmail([...new Set(oncallEmails)], `[VynDB ${incident.severity.toUpperCase()}] ${incident.title}`, deliveryMessage) })
+  } else channels.push({ channel: 'oncall', outcome: 'not_applicable' })
   let complete = true
-  for (const [channel, deliver] of deliveries) {
-    const key = `${incident.id}:${incident.reopenedAt ?? 'original'}:${notificationKey}:${channel}`
-    if (state[key] === 'sent') continue
+  for (const { channel, target, deliver } of deliveries) {
+    const legacyKey = `${deliveryBaseKey}:${channel}`
+    const key = `${legacyKey}:${targetFingerprint(target)}`
+    if (state[key] === 'sent') {
+      channels.push({ channel, outcome: 'sent' })
+      continue
+    }
+    if (state[legacyKey] === 'sent') {
+      state[key] = 'sent'
+      delete state[legacyKey]
+      saveIncidentDeliveryState(file, state)
+      channels.push({ channel, outcome: 'sent' })
+      continue
+    }
     const result = await deliver().catch(() => 'failed' as const)
-    if (result !== 'sent') complete = false
-    if (result !== state[key] || result === 'failed') {
+    const outcome: IncidentChannelOutcome = result === 'sent' ? 'sent'
+      : result === 'failed' || result === 'skipped' ? 'failed' : 'configuration_error'
+    if (outcome !== 'sent') complete = false
+    channels.push({ channel, outcome })
+    if (result !== state[key] || result === 'failed' || outcome === 'configuration_error') {
       appendAudit({ actor: 'notifier', action: 'incident.notify', resource: 'incident', resourceId: incident.id, success: result === 'sent', details: { channel, notificationKey, result } })
     }
     try { state = JSON.parse(fs.readFileSync(file, 'utf8')) as typeof state } catch {}
     if (state[key] !== 'sent') state[key] = result
-    fs.mkdirSync(path.dirname(file), { recursive: true })
-    const temp = `${file}.${process.pid}.tmp`
-    fs.writeFileSync(temp, JSON.stringify(state), 'utf8')
-    fs.renameSync(temp, file)
+    saveIncidentDeliveryState(file, state)
   }
-  return complete
+  for (const { channel, outcome } of channels.filter(item => item.outcome === 'configuration_error')) {
+    const key = `${incident.id}:${incident.reopenedAt ?? 'original'}:${notificationKey}:${channel}`
+    if (state[key] === 'skipped') continue
+    appendAudit({ actor: 'notifier', action: 'incident.notify', resource: 'incident', resourceId: incident.id, success: false, details: { channel, notificationKey, result: 'configuration_error' } })
+    state[key] = 'skipped'
+    saveIncidentDeliveryState(file, state)
+  }
+  if (!channels.some(channel => channel.outcome === 'sent') ||
+      channels.some(channel => channel.outcome === 'configuration_error' || channel.outcome === 'failed')) complete = false
+  return { complete, channels }
+}
+
+export async function notifyIncident(
+  incident: Incident,
+  targets: Pick<RoutingRule, 'notifySlack' | 'notifyTeams' | 'notifyWebhook' | 'notifyOncall' | 'notifyEmails'>,
+  notificationKey = 'initial',
+  message = `[VynDB ${incident.severity.toUpperCase()}] ${incident.title}\nIncident: ${incident.id}\nDatabase: ${incident.dbName}\nCategory: ${incident.category}\nStatus: ${incident.status}`,
+): Promise<boolean> {
+  return (await notifyIncidentDetailed(incident, targets, notificationKey, message)).complete
 }
