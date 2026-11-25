@@ -164,13 +164,20 @@ export default function CopilotPage() {
         }),
       })
       const data = await res.json()
-      const assistantMsg: Message = { role: 'assistant', content: data.content ?? 'Sorry, I could not generate a response.', ts: Date.now() }
+      if (!res.ok) {
+        throw new Error(typeof data.error === 'string' && data.error.trim() ? data.error : `Copilot request failed (${res.status}).`)
+      }
+      if (typeof data.content !== 'string' || !data.content.trim()) {
+        throw new Error('AI provider returned no visible text. Token usage may still be charged. Check Settings → AI Copilot before retrying.')
+      }
+      const assistantMsg: Message = { role: 'assistant', content: data.content, ts: Date.now() }
       const finalMessages = [...newMessages, assistantMsg]
       setMessages(finalMessages)
       // Auto-save after each exchange
       saveSession(finalMessages)
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Network error. Please check your connection and try again.', ts: Date.now() }])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Network error. Please check your connection and try again.'
+      setMessages(prev => [...prev, { role: 'assistant', content: message, ts: Date.now() }])
     } finally {
       setLoading(false)
     }

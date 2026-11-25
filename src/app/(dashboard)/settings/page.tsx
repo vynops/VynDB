@@ -154,9 +154,20 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider, apiKey, model, baseUrl }),
       })
-      const data = await res.json()
+      const text = await res.text()
+      let data: { ok?: boolean; message?: string } = {}
+      try {
+        data = text ? JSON.parse(text) : {}
+      } catch {
+        // Non-JSON response (e.g. a proxy/server error page) - surface the HTTP status instead of a parse error.
+        setAiTestResult({
+          ok: false,
+          msg: `Server returned an unexpected response (HTTP ${res.status} ${res.statusText || ''}).`.trim(),
+        })
+        return
+      }
       setAiTestResult({
-        ok: res.ok && data.ok,
+        ok: res.ok && Boolean(data.ok),
         msg: data.message || (res.ok ? 'Connected' : 'Failed to connect'),
       })
     } catch (e) {

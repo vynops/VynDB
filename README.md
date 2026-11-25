@@ -647,6 +647,9 @@ Choose the provider and set its API key in **Settings → AI Copilot**. For Groq
 GROQ_API_KEY=gsk_your_key_here
 ```
 
+### AI Copilot uses tokens but shows no answer
+Token usage means the provider processed a request, not that it returned visible text. Copilot combines all Anthropic text blocks and reports empty responses as errors rather than blank messages. Usage remains recorded for these requests because providers may still charge for them. Check the displayed provider error and the configured model/output token limit before retrying. After deploying a fix, rebuild and restart the application so the server and browser use the updated code.
+
 ### Backups failing for MongoDB
 The backup runner authenticates using the credentials saved for that MongoDB connection. Confirm the account has read access to the target database and that its authentication database matches the connection (`admin` for the `admin` user, otherwise the target database). Test the connection, then retry the backup.
 

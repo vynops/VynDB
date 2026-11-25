@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { getSettings } from '@/lib/settings-store'
 import { recordUsage } from '@/lib/copilot-usage'
+import { readOpenAICompletion } from '@/lib/openai-completion'
 
 export async function POST(req: NextRequest) {
   const auth = await requireRole(req, 'editor')
@@ -61,9 +62,9 @@ Respond ONLY with this JSON (no markdown):
     } else {
       const endpoint = provider === 'custom' ? `${(settings.aiBaseUrl || '').replace(/\/$/, '')}/chat/completions` : provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://api.groq.com/openai/v1/chat/completions'
       if (provider === 'custom' && !settings.aiBaseUrl) return NextResponse.json({ error: 'Custom AI provider requires baseUrl to be configured' }, { status: 400 })
-      const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.2, max_tokens: 1024 }) })
+      const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }],       temperature: 0.2, max_tokens: 1024, stream: false }) })
       if (!response.ok) throw new Error(`${provider} API error: ${response.status} ${response.statusText}`)
-      const data = await response.json() as { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number } }
+            const data = await readOpenAICompletion(response)
       raw = data.choices?.[0]?.message?.content ?? '{}'
       promptTokens = data.usage?.prompt_tokens ?? 0
       completionTokens = data.usage?.completion_tokens ?? 0

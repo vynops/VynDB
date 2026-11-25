@@ -10,6 +10,7 @@ import path from 'path'
 import type { PerformanceSnapshot, SecurityFinding } from '@/lib/db-store'
 import { getDatabaseCapabilities } from '@/lib/database-capabilities'
 import { isStatusStale } from '@/lib/status-freshness'
+import { readOpenAICompletion } from '@/lib/openai-completion'
 
 const GROQ_DEFAULT_MODEL = 'openai/gpt-oss-120b'
 const RETIRED_GROQ_MODELS = new Set(['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'])
@@ -209,7 +210,7 @@ async function callAnthropic(
     messages: messages as Parameters<typeof anthropic.messages.create>[0]['messages'],
   })
   return {
-    reply: response.content[0]?.type === 'text' ? response.content[0].text : '',
+    reply: response.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n\n'),
     promptTokens: response.usage?.input_tokens ?? 0,
     completionTokens: response.usage?.output_tokens ?? 0,
   }
@@ -257,6 +258,7 @@ async function callCustom(
     body: JSON.stringify({
       model,
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      stream: false,
       temperature: 0.5,
       max_tokens: 2048,
     }),
@@ -266,10 +268,7 @@ async function callCustom(
     throw new Error(`Custom API error: ${response.status} ${response.statusText}`)
   }
 
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>
-    usage?: { prompt_tokens?: number; completion_tokens?: number }
-  }
+  const data = await readOpenAICompletion(response)
 
   return {
     reply: data.choices?.[0]?.message?.content ?? '',
@@ -356,6 +355,13 @@ Response style: Be concise but operationally complete. Cite exact database names
     }
 
     recordUsage(promptTokens, completionTokens, model, provider)
+    if (!reply.trim()) {
+      console.error(`[Copilot] ${provider} returned no visible text`, { model, promptTokens, completionTokens })
+      return NextResponse.json(
+        { error: 'AI provider returned no visible text. Token usage may still be charged. Check the configured model and its output token limit before retrying.' },
+        { status: 502 }
+      )
+    }
     return NextResponse.json({ content: reply })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
